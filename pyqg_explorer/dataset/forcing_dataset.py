@@ -19,8 +19,8 @@ class ForcingDataset(Dataset):
         
         """
         super().__init__()
-        self.x_data=torch.tensor(x_xarr.to_numpy())
-        self.y_data=torch.tensor(y_xarr.to_numpy())
+        self.x_data=torch.unsqueeze(torch.tensor(x_xarr.to_numpy()),dim=1)
+        self.y_data=torch.unsqueeze(torch.tensor(y_xarr.to_numpy()),dim=1)
         self.len=len(self.x_data)
         self.train_ratio=train_ratio
         self.valid_ratio=valid_ratio
