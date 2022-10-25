@@ -18,6 +18,7 @@ class BaseModel(LightningModule):
         """ Take a batch, perform a train, valid or test step """
         x,y=batch
 
+
 class CNN(pl.LightningModule):
     def __init__(self,in_channels=1):
         super().__init__()
@@ -30,6 +31,7 @@ class CNN(pl.LightningModule):
         print(x.shape)
         x = self.model(x)
         return x
+
 
 def make_block(in_channels: int, out_channels: int, kernel_size: int, 
         ReLU = 'ReLU', batch_norm = True) -> list:
@@ -53,17 +55,15 @@ def make_block(in_channels: int, out_channels: int, kernel_size: int,
     return block
 
 
-class AndrewCNN(nn.Module):
-    def __init__(self, n_in: int, n_out: int, ReLU = 'ReLU') -> list:
+class AndrewCNN(pl.LightningModule):
+    def __init__(self, n_in: int, n_out: int, ReLU = 'ReLU', lr=0.001) -> list:
         '''
         Packs sequence of 8 convolutional layers in a list.
         First layer has n_in input channels, and Last layer has n_out
         output channels
         '''
         super().__init__()
-        self.div = div
-        if div:
-            n_out *= 2
+        self.lr=lr
         blocks = []
         blocks.extend(make_block(n_in,128,5,ReLU))                #1
         blocks.extend(make_block(128,64,5,ReLU))                  #2
@@ -74,12 +74,72 @@ class AndrewCNN(nn.Module):
         blocks.extend(make_block(32,32,3,ReLU))                   #7
         blocks.extend(make_block(32,n_out,3,'False',False))       #8
         self.conv = nn.Sequential(*blocks)
+
     def forward(self, x):
         x = self.conv(x)
         return x
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
+        return optimizer
+
+    def loss_fn(self,x,y):
+        return nn.MSELoss()(x, y)
+
+    def step(self, batch, kind: str) -> dict:
+        """Generic step function that runs the network on a batch and outputs loss
+        nformation that will be aggregated at epoch end.
+        This function is used to implement the training, validation, and test steps.
+        """
+        # run the model and calculate loss
+        x,y = batch[0],batch[1]
+        loss = self.loss_fn(self(x),y)
+
+        total = len(y)
+
+        batch_dict = {
+            "loss": loss,
+            "total": total,
+        }
+        return batch_dict
+
+    def epoch_end(self, outputs, kind: str):
+        """Generic function for summarizing and logging the loss and accuracy over an
+        epoch.
+        Creates log entries with name `f"{kind}_loss"` and `f"{kind}_accuracy"`.
+        This function is used to implement the training, validation, and test epoch-end
+        functions.
+        """
+        with torch.no_grad():
+            # calculate average loss and average accuracy
+            total_loss = sum(_["loss"] * _["total"] for _ in outputs)
+            total = sum(_["total"] for _ in outputs)
+            avg_loss = total_loss / total
+
+        # log
+        self.log(f"{kind}_loss", avg_loss)
+
     def compute_loss(self, x, ytrue):
         '''
         In case you want to use this block for training 
         as regression model with standard trainer cnn_tools.train()
         '''
         return {'loss': nn.MSELoss()(self.forward(x), ytrue)}
+
+    def training_step(self, batch, batch_idx) -> dict:
+        return self.step(batch, "train")
+
+    def validation_step(self, batch, batch_idx) -> dict:
+        return self.step(batch, "val")
+
+    def test_step(self, batch, batch_idx) -> dict:
+        return self.step(batch, "test")
+
+    def training_epoch_end(self, outputs):
+        self.epoch_end(outputs, "train")
+
+    def validation_epoch_end(self, outputs):
+        self.epoch_end(outputs, "val")
+
+    def test_epoch_end(self, outputs):
+        self.epoch_end(outputs, "test")
