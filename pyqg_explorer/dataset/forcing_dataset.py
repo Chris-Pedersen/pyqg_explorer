@@ -8,7 +8,7 @@ class ForcingDataset(Dataset):
     """
     Subgrid forcing maps dataset
     """
-    def __init__(self,x_xarr,y_xarr,seed=42,train_ratio=0.8,valid_ratio=0.1,test_ratio=0.1):
+    def __init__(self,x_xarr,y_xarr,seed=42,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
         x_xarr:      xarray of "x" data, i.e. the low resolution fields
         y_xarr:      xarray of "y" data, i.e. the subgrid forcing field
@@ -21,16 +21,20 @@ class ForcingDataset(Dataset):
         super().__init__()
         self.x_data=torch.unsqueeze(torch.tensor(x_xarr.to_numpy()),dim=1)
         self.y_data=torch.unsqueeze(torch.tensor(y_xarr.to_numpy()),dim=1)
-        self.len=len(self.x_data)
         self.train_ratio=train_ratio
         self.valid_ratio=valid_ratio
         self.test_ratio=test_ratio
         self.rng = np.random.default_rng(seed)
+
+        self.x_renorm=torch.std(self.x_data)
+        self.y_renorm=torch.std(self.y_data)
+        self.x_data=self.x_data/self.x_renorm
+        self.y_data=self.y_data/self.y_renorm
+        self.len=len(self.x_data)
         
         assert len(self.x_data)==len(self.y_data), "Number of x and y samples should be the same"
         
         self._get_split_indices()
-        
         
     def _get_split_indices(self):
         """ Set indices for train, valid and test splits """
