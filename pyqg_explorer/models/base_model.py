@@ -29,20 +29,7 @@ class BaseModel(LightningModule):
 
     def validation_step(self, batch, batch_idx):      
         return self.step(batch,"valid")
-
-
-class CNN(pl.LightningModule):
-    def __init__(self,in_channels=1):
-        super().__init__()
-        self.model = nn.Sequential(
-                    nn.Conv2d(in_channels, 128, 5, 1, padding="same",padding_mode='circular'),
-                    nn.ReLU(),
-                    nn.BatchNorm2d(128))
-    
-    def forward(self, x):
-        print(x.shape)
-        x = self.model(x)
-        return x
+        
 
 ## From Andrew/Pavel's code, function to create a CNN block
 def make_block(in_channels: int, out_channels: int, kernel_size: int, 
