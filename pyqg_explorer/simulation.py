@@ -58,7 +58,7 @@ def concat_in_time(datasets):
 
 class Simulation:
     def __init__(self,nx=256,tmax=311040000.0,twrite=1000,tavestart=155520000.0,
-                             taveint=86400.0,dt=3600,log_level=1):
+                             taveint=86400.0,dt=3600,log_level=1, parameterization=None):
         self.nx=nx
         self.twrite=twrite
         self.tmax=int(tmax)
@@ -66,9 +66,10 @@ class Simulation:
         self.taveint=taveint
         self.dt=dt
         self.log_level=log_level
+        self.parameterization=parameterization
 
         ## Initialise model
-        self.model=pyqg.QGModel(nx=self.nx,tmax=self.tmax,twrite=self.twrite,tavestart=self.tavestart,taveint=self.taveint,dt=self.dt,log_level=self.log_level)
+        self.model=pyqg.QGModel(nx=self.nx,tmax=self.tmax,twrite=self.twrite,tavestart=self.tavestart,taveint=self.taveint,dt=self.dt,log_level=self.log_level,parameterization=self.parameterization)
 
     
     def run_sim(self,start=0.5,freq=2):
