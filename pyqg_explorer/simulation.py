@@ -1,6 +1,7 @@
 import pyqg
 import numpy as np
 import xarray as xr
+import pyqg_subgrid_experiments as pse
 import os
 
 def concat_in_time(datasets):
@@ -84,8 +85,10 @@ class Simulation:
                 ds.append(self.model.to_dataset().copy(deep=True))
 
         self.sim_data = concat_in_time(ds).astype('float32')
+        ## Use Andrew's dataset wrapper to access more quantities
+        self.sim_data = pse.dataset.Dataset(self.sim_data)
         #out.attrs['pyqg_params'] = str(pyqg_params)
 
     def save_sim(self,savename,path="/scratch/cp3759/pyqg_data/sims/"):
-        print('Saving to file')
+        print('Saving to file: %s ' % savename+".nc")
         self.sim_data.to_netcdf(os.path.join(path, savename+".nc"))
