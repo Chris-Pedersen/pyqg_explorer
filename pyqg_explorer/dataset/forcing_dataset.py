@@ -2,6 +2,7 @@ import torch
 import math
 import numpy as np
 from torch.utils.data import Dataset
+import torchvision.transforms as T
 
 
 ## Build a single-step dataset
@@ -9,18 +10,20 @@ class SingleStepDataset(Dataset):
     """
     Subgrid forcing maps dataset
     """
-    def __init__(self,pv,dqbar_dt,s,seed=42,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,pv,dqbar_dt,seed=42,normalise=True,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
         pv:          xarray of the PV field
         dqbar_dt:    xarray of PV tendency
         s:           xarray of the subgrid forcing field
         seed:        random seed used to create train/valid/test splits
+        normalise:   bool, normalise mean and variance of fields
         train_ratio: proportion of dataset to use as training data
         valid_ratio: proportion of dataset to use as validation data
         test_ratio:  proportion of dataset to use as test data
         
         """
         super().__init__()
+        self.normalise=normalise
         self.pv=torch.unsqueeze(torch.tensor(pv.to_numpy()),dim=1)
         self.dqbar_dt=torch.unsqueeze(torch.tensor(dqbar_dt.to_numpy()),dim=1)
         self.s=torch.unsqueeze(torch.tensor(s.to_numpy()),dim=1)
@@ -75,31 +78,33 @@ class SingleStepDataset(Dataset):
         assert len(set(self.train_idx) & set(self.valid_idx) & set(self.test_idx))==0, (
                 "Common elements in train, valid or test set")
         
-        
     def __len__(self):
         return self.len
-    
     
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         return (self.x_data[idx],self.y_data[idx])
 
+
 class ForcingDataset(Dataset):
     """
     Subgrid forcing maps dataset
     """
-    def __init__(self,x_xarr,y_xarr,seed=42,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,x_xarr,y_xarr,seed=42,normalise=True,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
-        x_xarr:      xarray of "x" data, i.e. the low resolution fields
-        y_xarr:      xarray of "y" data, i.e. the subgrid forcing field
+        pv:          xarray of the PV field
+        dqbar_dt:    xarray of PV tendency
+        s:           xarray of the subgrid forcing field
         seed:        random seed used to create train/valid/test splits
+        normalise:   bool, normalise mean and variance of fields
         train_ratio: proportion of dataset to use as training data
         valid_ratio: proportion of dataset to use as validation data
         test_ratio:  proportion of dataset to use as test data
         
         """
         super().__init__()
+        self.normalise=normalise
         self.x_data=torch.unsqueeze(torch.tensor(x_xarr.to_numpy()),dim=1)
         self.y_data=torch.unsqueeze(torch.tensor(y_xarr.to_numpy()),dim=1)
         self.train_ratio=train_ratio
@@ -116,6 +121,14 @@ class ForcingDataset(Dataset):
         assert len(self.x_data)==len(self.y_data), "Number of x and y samples should be the same"
         
         self._get_split_indices()
+        
+        if self.normalise:
+            self.x_preprocess=T.Compose([T.Normalize(
+               mean=[self.x_data.mean()],
+               std=[self.x_data.std()])])
+            self.y_preprocess=T.Compose([T.Normalize(
+               mean=[self.y_data.mean()],
+               std=[self.y_data.std()])])
         
     def _get_split_indices(self):
         """ Set indices for train, valid and test splits """
@@ -140,12 +153,14 @@ class ForcingDataset(Dataset):
         assert len(set(self.train_idx) & set(self.valid_idx) & set(self.test_idx))==0, (
                 "Common elements in train, valid or test set")
         
-        
     def __len__(self):
         return self.len
-    
     
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        return (self.x_data[idx],self.y_data[idx])
+        if self.normalise:
+            return (self.x_preprocess(self.x_data[idx]),self.y_preprocess(self.y_data[idx]))
+        else:
+            return (self.x_data[idx],self.y_data[idx])
+            
