@@ -1,17 +1,27 @@
 from pytorch_lightning import LightningModule
+import pickle
+import os
 import functools
 import torch
 import torch.nn as nn
 
 
+def load_model(load_string):
+    with open(load_string, 'rb') as fp:
+        model_dict = pickle.load(fp)
+    model=AndrewCNN(model_dict["config"])
+    model.load_state_dict(model_dict["state_dict"])
+    return model
+
+
 class BaseModel(LightningModule):
     """ Class to store core model methods """
-    def __init__(self,lr:float=0.001):
+    def __init__(self,config:dict):
         super().__init__()
-        self.lr=lr
+        self.config=config
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
+        optimizer = torch.optim.AdamW(self.parameters(),lr=self.config["lr"])
         return optimizer
 
     def loss_fn(self,x,y):
@@ -29,6 +39,16 @@ class BaseModel(LightningModule):
 
     def validation_step(self, batch, batch_idx):      
         return self.step(batch,"valid")
+
+    def save_model(self):
+        save_dict={}
+        save_dict["state_dict"]=self.state_dict()
+        save_dict["config"]=self.config
+        save_string=os.path.join(self.config["save_path"],self.config["save_name"])
+        with open(save_string, 'wb') as handle:
+            pickle.dump(save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        print("Model saved as %s" % save_string)
+
         
 
 ##### Unet #########
@@ -86,6 +106,7 @@ class UnetSkipConnectionBlock(nn.Module):
             use_dropout (bool)  -- if use dropout layers.
         """
         super(UnetSkipConnectionBlock, self).__init__()
+        self.arch="Unet"
         self.outermost = outermost
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
@@ -158,28 +179,32 @@ def make_block(in_channels: int, out_channels: int, kernel_size: int,
 
 
 class AndrewCNN(BaseModel):
-    def __init__(self, n_in: int, n_out: int, x_renorm=torch.tensor(1.), y_renorm=torch.tensor(1.), ReLU = 'ReLU', lr=0.001) -> list:
+    def __init__(self,config):
         '''
         Packs sequence of 8 convolutional layers in a list.
-        First layer has n_in input channels, and Last layer has n_out
+        First layer has n_in input channels, and last layer has n_out
         output channels
+
         '''
-        super().__init__(lr=lr)
-        self.lr=lr
-        ## Register normalisation factors as buffers
-        self.register_buffer('x_renorm', x_renorm)
-        self.register_buffer('y_renorm', y_renorm)
+        super().__init__(config)
+
         blocks = []
-        blocks.extend(make_block(n_in,128,5,ReLU))                #1
-        blocks.extend(make_block(128,64,5,ReLU))                  #2
-        blocks.extend(make_block(64,32,3,ReLU))                   #3
-        blocks.extend(make_block(32,32,3,ReLU))                   #4
-        blocks.extend(make_block(32,32,3,ReLU))                   #5
-        blocks.extend(make_block(32,32,3,ReLU))                   #6
-        blocks.extend(make_block(32,32,3,ReLU))                   #7
-        blocks.extend(make_block(32,n_out,3,'False',False))       #8
+        blocks.extend(make_block(self.config["input_channels"],128,5,self.config["activation"])) #1
+        blocks.extend(make_block(128,64,5,self.config["activation"]))                            #2
+        blocks.extend(make_block(64,32,3,self.config["activation"]))                             #3
+        blocks.extend(make_block(32,32,3,self.config["activation"]))                             #4
+        blocks.extend(make_block(32,32,3,self.config["activation"]))                             #5
+        blocks.extend(make_block(32,32,3,self.config["activation"]))                             #6
+        blocks.extend(make_block(32,32,3,self.config["activation"]))                             #7
+        blocks.extend(make_block(32,self.config["output_channels"],3,'False',False))             #8
         self.conv = nn.Sequential(*blocks)
 
     def forward(self, x):
+        x = self.conv(x)
+        return x
+
+    def pred(self, x):
+        """ Method to call when receiving un-normalised data, when implemented as a pyqg
+            parameterisation """
         x = self.conv(x)
         return x
