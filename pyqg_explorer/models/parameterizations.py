@@ -12,10 +12,10 @@ class Parameterization(pyqg.QParameterization):
         self.models=models
         self.normalise=normalise
 
-        self.x_transforms_upper=(models[0].config["x_mean"],models[0].config["x_std"])
-        self.y_transforms_upper=(models[0].config["y_mean"],models[0].config["y_std"])
-        self.x_transforms_lower=(models[1].config["x_mean"],models[1].config["x_std"])
-        self.y_transforms_lower=(models[1].config["y_mean"],models[1].config["y_std"])
+        self.q_transforms_upper=(models[0].config["q_mean"],models[0].config["q_std"])
+        self.s_transforms_upper=(models[0].config["s_mean"],models[0].config["s_std"])
+        self.q_transforms_lower=(models[1].config["q_mean"],models[1].config["q_std"])
+        self.s_transforms_lower=(models[1].config["s_mean"],models[1].config["s_std"])
 
     def __call__(self, m):
         """ 
@@ -38,8 +38,8 @@ class Parameterization(pyqg.QParameterization):
         q2=((torch.tensor(q2).unsqueeze(0).unsqueeze(0)).float())
 
         ## Renormalise input (q) field
-        q1=transforms.normalise_field(q1,self.x_transforms_upper[0],self.x_transforms_upper[1])
-        q2=transforms.normalise_field(q2,self.x_transforms_lower[0],self.x_transforms_lower[1])
+        q1=transforms.normalise_field(q1,self.q_transforms_upper[0],self.q_transforms_upper[1])
+        q2=transforms.normalise_field(q2,self.q_transforms_lower[0],self.q_transforms_lower[1])
 
         ## Pass input potential vorticity fields into pytorch model
         ## Renormalise using the model's normalisation factors
@@ -48,8 +48,8 @@ class Parameterization(pyqg.QParameterization):
         s_2=((self.models[1](q2)).squeeze())
 
         ## Renormalise output (S) field
-        s_1=transforms.denormalise_field(s_1,self.y_transforms_upper[0],self.y_transforms_upper[1])
-        s_2=transforms.denormalise_field(s_2,self.y_transforms_lower[0],self.y_transforms_lower[1])
+        s_1=transforms.denormalise_field(s_1,self.s_transforms_upper[0],self.s_transforms_upper[1])
+        s_2=transforms.denormalise_field(s_2,self.s_transforms_lower[0],self.s_transforms_lower[1])
 
         s_1=s_1.detach().numpy()
         s_2=s_2.detach().numpy()
