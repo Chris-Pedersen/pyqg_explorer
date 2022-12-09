@@ -1,10 +1,16 @@
-from pytorch_lightning import LightningModule
 import pickle
 import os
 import functools
 import torch
 import torch.nn as nn
+from pytorch_lightning import LightningModule
+from pytorch_lightning.loops import FitLoop
 
+
+## Custom lightning loop for the single-step optimisation
+class CustomFitLoop(FitLoop):
+    def advance(self):
+        """Put your custom logic here."""
 
 def load_model(load_string):
     with open(load_string, 'rb') as fp:

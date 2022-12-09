@@ -38,10 +38,10 @@ class ForcingDataset(Dataset):
             self.y_data=self.y_data[:self.subsample]
 
         ## Get means, stds for preprocessing
-        self.x_mean=torch.tensor([self.x_data.mean()])
-        self.x_std=torch.tensor([self.x_data.std()])
-        self.y_mean=torch.tensor([self.y_data.mean()])
-        self.y_std=torch.tensor([self.y_data.std()])
+        self.q_mean=torch.tensor([self.x_data.mean()])
+        self.q_std=torch.tensor([self.x_data.std()])
+        self.s_mean=torch.tensor([self.y_data.mean()])
+        self.s_std=torch.tensor([self.y_data.std()])
 
         self.len=len(self.x_data)
         
@@ -80,8 +80,8 @@ class ForcingDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         if self.normalise:
-            return (transforms.normalise_field(self.x_data[idx],self.x_mean,self.x_std),
-                        transforms.normalise_field(self.y_data[idx],self.y_mean,self.y_std))
+            return (transforms.normalise_field(self.x_data[idx],self.q_mean,self.q_std),
+                        transforms.normalise_field(self.y_data[idx],self.s_mean,self.s_std))
         else:
             return (self.x_data[idx],self.y_data[idx])
             
