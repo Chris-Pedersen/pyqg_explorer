@@ -2,7 +2,6 @@ import pyqg
 import torch
 import copy
 import numpy as np
-import pyqg_explorer.util.transforms as transforms
 
 class Parameterization(pyqg.QParameterization):
     """ pyqg subgrid parameterisation for the potential vorticity"""
@@ -11,11 +10,6 @@ class Parameterization(pyqg.QParameterization):
         """ Initialise with a list of torch models, one for each layer """
         self.models=models
         self.normalise=normalise
-
-        self.q_transforms_upper=(models[0].config["q_mean"],models[0].config["q_std"])
-        self.s_transforms_upper=(models[0].config["s_mean"],models[0].config["s_std"])
-        self.q_transforms_lower=(models[1].config["q_mean"],models[1].config["q_std"])
-        self.s_transforms_lower=(models[1].config["s_mean"],models[1].config["s_std"])
 
     def __call__(self, m):
         """ 
@@ -26,8 +20,8 @@ class Parameterization(pyqg.QParameterization):
                            forcing values """
 
         ## Extract potential vorticity values
-        q1=m.q[0]
-        q2=m.q[1]
+        q1=m.q[0] ## Upper layer q1
+        q2=m.q[1] ## Lower layer q2
 
         if np.isnan(q1.any()) or np.isnan(q2.any()):
             print("NaNs in pv field")
@@ -37,22 +31,17 @@ class Parameterization(pyqg.QParameterization):
         q1=((torch.tensor(q1).unsqueeze(0).unsqueeze(0)).float())
         q2=((torch.tensor(q2).unsqueeze(0).unsqueeze(0)).float())
 
-        ## Renormalise input (q) field
-        q1=transforms.normalise_field(q1,self.q_transforms_upper[0],self.q_transforms_upper[1])
-        q2=transforms.normalise_field(q2,self.q_transforms_lower[0],self.q_transforms_lower[1])
-
         ## Pass input potential vorticity fields into pytorch model
-        ## Renormalise using the model's normalisation factors
+        ## Using pred method which will account for normalisations
         ## Remove unused dimensions required by torch, and convert to numpy array
-        s_1=((self.models[0](q1)).squeeze())
-        s_2=((self.models[1](q2)).squeeze())
-
-        ## Renormalise output (S) field
-        s_1=transforms.denormalise_field(s_1,self.s_transforms_upper[0],self.s_transforms_upper[1])
-        s_2=transforms.denormalise_field(s_2,self.s_transforms_lower[0],self.s_transforms_lower[1])
+        s_1=((self.models[0].pred(q1)).squeeze())
+        s_2=((self.models[1].pred(q2)).squeeze())
 
         s_1=s_1.detach().numpy()
         s_2=s_2.detach().numpy()
+
+        print(s_1)
+        print(s_2)
         
         ## Rescale to 0 mean if required
         if self.normalise:

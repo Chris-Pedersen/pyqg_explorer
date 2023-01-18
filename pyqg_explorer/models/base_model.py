@@ -6,6 +6,8 @@ import torch.nn as nn
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loops import FitLoop
 
+import pyqg_explorer.util.transforms as transforms
+
 
 ## Custom lightning loop for the single-step optimisation
 class CustomFitLoop(FitLoop):
@@ -212,5 +214,12 @@ class AndrewCNN(BaseModel):
     def pred(self, x):
         """ Method to call when receiving un-normalised data, when implemented as a pyqg
             parameterisation """
+        ## Map from physical to normalised space using the factors used to train the network
+        x = transforms.normalise_field(x,self.config["q_mean"],self.config["q_std"])
+
+        ## Use NN to produce a forcing field
         x = self.conv(x)
+
+        ## Map back from normalised space to physical units
+        x = transforms.denormalise_field(x,self.config["q_mean"],self.config["q_std"])
         return x
