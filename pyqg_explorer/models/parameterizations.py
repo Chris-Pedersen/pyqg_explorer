@@ -39,9 +39,6 @@ class Parameterization(pyqg.QParameterization):
 
         s_1=s_1.detach().numpy()
         s_2=s_2.detach().numpy()
-
-        print(s_1)
-        print(s_2)
         
         ## Rescale to 0 mean if required
         if self.normalise:

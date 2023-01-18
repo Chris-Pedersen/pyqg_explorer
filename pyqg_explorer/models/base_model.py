@@ -221,5 +221,5 @@ class AndrewCNN(BaseModel):
         x = self.conv(x)
 
         ## Map back from normalised space to physical units
-        x = transforms.denormalise_field(x,self.config["q_mean"],self.config["q_std"])
+        x = transforms.denormalise_field(x,self.config["s_mean"],self.config["s_std"])
         return x
