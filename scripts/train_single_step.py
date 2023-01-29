@@ -86,7 +86,7 @@ data_q=data_q.transpose("snapshot","y","x")
 
 del data_full
 
-single_dataset=forcing_dataset.SingleStepDataset(data_q,data_dqbar,data_forcing,normalise=config["normalise"],subsample=config["subsample"])
+single_dataset=forcing_dataset.SingleStepDataset(data_q,data_dqbar,data_forcing,seed=config["seed"],normalise=config["normalise"],subsample=config["subsample"])
 
 del data_forcing
 del data_dqbar
@@ -101,7 +101,7 @@ config["validation_fields"]=len(single_dataset.valid_idx)
 
 config_beta=copy.deepcopy(config)
 config_beta["input_channels"]=3
-config_beta["save_name"]="cnn_beta%d.pt" % config_beta["beta_steps"]
+config_beta["save_name"]="cnn_beta%d_betaloss%d_lev%d_epoch%d.pt" % (beta_steps,beta_loss,lev,epochs)
 config_beta["arch"]="cnn_beta"
 
 train_loader = DataLoader(
@@ -222,6 +222,7 @@ for epoch in range(config["epochs"]):  # loop over the dataset multiple times
 
 
 model_theta.save_model()
+model_beta.save_model()
 
 x_maps=torch.tensor(()).to("cpu")
 y_true=torch.tensor(()).to("cpu")
