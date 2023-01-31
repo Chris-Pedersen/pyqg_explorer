@@ -21,6 +21,7 @@ import pyqg_explorer.dataset.forcing_dataset as forcing_dataset
 import pyqg_explorer.models.base_model as base_model
 import pyqg_explorer.util.pbar as pbar
 import pyqg_explorer.util.transforms as transforms
+import pyqg_explorer.util.divergence_dataset as divergence_dataset
 import pyqg_explorer.util.powerspec as powerspec
 
 from sklearn.metrics import r2_score
@@ -33,12 +34,12 @@ else:
     print('CUDA Not Available')
     device = torch.device('cpu')
 
-lev=0
+lev="both"
 forcing=1
 seed=123
 batch_size=64
-input_channels=1
-output_channels=1
+input_channels=2
+output_channels=2
 activation="ReLU"
 arch="cnn_theta"
 epochs=200
@@ -47,7 +48,7 @@ normalise="proper"
 beta_steps=int(sys.argv[1])
 beta_loss=float(sys.argv[2])
 save_path="/scratch/cp3759/pyqg_data/models"
-save_name="cnn_theta_beta%d_betaloss%d_lev%d_epoch%d.pt" % (beta_steps,beta_loss,lev,epochs)
+save_name="cnn_theta_beta%d_%d_forcing%d_both_epoch%d.pt" % (beta_steps,beta_loss,forcing,epochs)
 lr=0.0001
 
 ## Wandb config file
@@ -70,38 +71,22 @@ config={"lev":lev,
 
 print("Config:", config)
 
-data_full=xr.open_dataset('/scratch/cp3759/pyqg_data/sims/%d_step/all.nc' % beta_steps)
-data_dqbar=data_full.dqdt_through_lores.isel(lev=config["lev"])
-data_dqbar=data_dqbar.stack(snapshot=("run","time"))
-data_dqbar=data_dqbar.transpose("snapshot","y","x")
-#data_dqbar.isel(snapshot=200).plot()
-data_forcing=data_full.q_forcing_advection.isel(lev=lev)
-data_forcing=data_forcing.stack(snapshot=("run","time"))
-data_forcing=data_forcing.transpose("snapshot","y","x")
-#data_forcing.isel(snapshot=20).plot()
-data_q=data_full.q.isel(lev=lev)
-data_q=data_q.stack(snapshot=("run","time"))
-data_q=data_q.transpose("snapshot","y","x")
-#data_q.isel(snapshot=20).plot()
+single_dataset=forcing_dataset.TimestepDatasetBoth('/scratch/cp3759/pyqg_data/sims/%d_step/all.nc' % config["beta_steps"],seed=config["seed"],normalise=config["normalise"],subsample=config["subsample"])
 
-del data_full
-
-single_dataset=forcing_dataset.SingleStepDataset(data_q,data_dqbar,data_forcing,seed=config["seed"],normalise=config["normalise"],subsample=config["subsample"])
-
-del data_forcing
-del data_dqbar
-del data_q
-
-config["q_mean"]=single_dataset.q_mean
-config["q_std"]=single_dataset.q_std
-config["s_mean"]=single_dataset.s_mean
-config["s_std"]=single_dataset.s_std
+config["q_mean_upper"]=single_dataset.q_mean_upper
+config["q_mean_lower"]=single_dataset.q_mean_lower
+config["q_std_upper"]=single_dataset.q_std_upper
+config["q_std_lower"]=single_dataset.q_std_lower
+config["s_mean_upper"]=single_dataset.s_mean_upper
+config["s_mean_lower"]=single_dataset.s_mean_lower
+config["s_std_upper"]=single_dataset.s_std_upper
+config["s_std_lower"]=single_dataset.s_std_lower
 config["training_fields"]=len(single_dataset.test_idx)
 config["validation_fields"]=len(single_dataset.valid_idx)
 
 config_beta=copy.deepcopy(config)
-config_beta["input_channels"]=3
-config_beta["save_name"]="cnn_beta%d_betaloss%d_lev%d_epoch%d.pt" % (beta_steps,beta_loss,lev,epochs)
+config_beta["input_channels"]=config["input_channels"]*3
+config_beta["save_name"]="cnn_beta%d_betaloss%d_both_epoch%d.pt" % (beta_steps,beta_loss,epochs)
 config_beta["arch"]="cnn_beta"
 
 train_loader = DataLoader(
@@ -121,7 +106,7 @@ model_beta=base_model.AndrewCNN(config_beta)
 model_theta.to(device)
 model_beta.to(device)
 
-wandb.init(project="pyqg_beta_cnns", entity="m2lines",config=config)
+wandb.init(project="pyqg_betanetwork", entity="m2lines",config=config)
 wandb.watch([model_theta,model_beta], log_freq=1)
 
 # optimizer parameters
@@ -135,12 +120,20 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=
 
 criterion=nn.MSELoss()
 
+def get_filter_grads(model):
+    ## Get parameters of first layer
+    name, param=next(model.named_parameters())
+    torch.linalg.vector_norm(param.grad,dim=(0,2,3))
+    norms=torch.linalg.vector_norm(param.grad,dim=(0,2,3)).detach()
+    return norms
+
 for epoch in range(config["epochs"]):  # loop over the dataset multiple times
 
     train_samples = 0.0
     train_running_loss = 0.0
     train_beta_running_loss = 0.0
     train_theta_running_loss = 0.0
+    grad_norms=torch.zeros(6).to(device)
 
     valid_running_loss = 0.0
     valid_beta_running_loss = 0.0
@@ -160,15 +153,16 @@ for epoch in range(config["epochs"]):  # loop over the dataset multiple times
         optimizer.zero_grad()
 
         ## First network
-        output_theta = model_theta(x_data[:,0,:,:].unsqueeze(1)) ## Takes in Q, outputs \hat{S}
+        output_theta = model_theta(x_data[:,0:2,:,:]) ## Takes in Q, outputs \hat{S}
         ## Second network
         ## Takes in Q, F, \hat{S}, outputs \hat{Q_{i+1}}
-        output_beta = model_beta(torch.cat((x_data[:,0,:,:].unsqueeze(1),x_data[:,1,:,:].unsqueeze(1),output_theta),1))
+        output_beta = model_beta(torch.cat((x_data[:,0:4,:,:],output_theta),1))
         
-        loss_1 = criterion(output_theta.squeeze(), x_data[:,2,:,:])
-        loss_2 = beta_loss*criterion(output_beta.squeeze(), y_data)
+        loss_1 = criterion(output_theta, x_data[:,4:6,:,:])
+        loss_2 = beta_loss*criterion(output_beta, y_data)
         loss = loss_1+loss_2
         loss.backward()
+        grad_norms+=get_filter_grads(model_beta)
         optimizer.step()
         
         
@@ -192,12 +186,13 @@ for epoch in range(config["epochs"]):  # loop over the dataset multiple times
         optimizer.zero_grad()
 
         ## First network
-        output_theta = model_theta(x_data[:,0,:,:].unsqueeze(1)) ## Takes in PV, outputs S
+        output_theta = model_theta(x_data[:,0:2,:,:]) ## Takes in Q, outputs \hat{S}
         ## Second network
-        output_beta = model_beta(torch.cat((x_data[:,0,:,:].unsqueeze(1),x_data[:,1,:,:].unsqueeze(1),output_theta),1))
+        ## Takes in Q, F, \hat{S}, outputs \hat{Q_{i+1}}
+        output_beta = model_beta(torch.cat((x_data[:,0:4,:,:],output_theta),1))
         
-        val_loss_1 = criterion(output_theta.squeeze(), x_data[:,2,:,:])
-        val_loss_2 = beta_loss*criterion(output_beta.squeeze(), y_data)
+        val_loss_1 = criterion(output_theta, x_data[:,4:6,:,:])
+        val_loss_2 = beta_loss*criterion(output_beta, y_data)
         val_loss = val_loss_1+val_loss_2
         ## Track loss for wandb
         valid_running_loss+=val_loss.detach()
@@ -214,6 +209,14 @@ for epoch in range(config["epochs"]):  # loop over the dataset multiple times
     log_dic["valid_loss"]=valid_running_loss/valid_samples
     log_dic["valid_theta_loss"]=valid_theta_running_loss/valid_samples
     log_dic["valid_beta_loss"]=valid_beta_running_loss/valid_samples
+    ## Track filter gradient norms
+    grad_norms/=train_samples
+    log_dic["q_upper_grad"]=grad_norms[0]
+    log_dic["q_lower_grad"]=grad_norms[1]
+    log_dic["f_upper_grad"]=grad_norms[2]
+    log_dic["f_lower_grad"]=grad_norms[3]
+    log_dic["theta_upper_grad"]=grad_norms[4]
+    log_dic["theta_lower_grad"]=grad_norms[5]
     wandb.log(log_dic)
     
     # verbose
@@ -242,7 +245,7 @@ for i, data in enumerate(valid_loader, 0):
     optimizer.zero_grad()
 
     ## First network
-    y_hat = model_theta(x_data[:,0,:,:].unsqueeze(1)) ## Takes in PV, outputs S
+    y_hat = model_theta(x_data[:,0:2,:,:]) ## Takes in PV, outputs S
     
     x_data_cpu=x_data.to("cpu")
     y_hat_cpu=y_hat.to("cpu")
@@ -250,63 +253,101 @@ for i, data in enumerate(valid_loader, 0):
     del x_data
     del y_hat
     
-    x_maps=torch.cat((x_maps,x_data_cpu[:,0,:,:].unsqueeze(1)),dim=0)
-    y_true=torch.cat((y_true,x_data_cpu[:,2,:,:].unsqueeze(1)),dim=0)
+    x_maps=torch.cat((x_maps,x_data_cpu[:,0:2,:,:]),dim=0)
+    y_true=torch.cat((y_true,x_data_cpu[:,4:6,:,:]),dim=0)
     y_pred=torch.cat((y_pred,y_hat_cpu),dim=0)
-
-## Convert validation metrics to numpy arrays
+## Convert validation fields to numpy arrays
 x_np=x_maps.squeeze().cpu().detach().numpy()
 y_np=y_true.squeeze().cpu().detach().numpy()
 y_pred_np=y_pred.squeeze().cpu().detach().numpy()
 
 ## Estimate R2
-r2=r2_score(y_np.flatten(),y_pred_np.flatten())
+r2_upper=r2_score(y_np[:,0,:,:].flatten(),y_pred_np[:,0,:,:].flatten())
+r2_lower=r2_score(y_np[:,1,:,:].flatten(),y_pred_np[:,1,:,:].flatten())
 
 ## Get power spectrum from validation set
-power_true=[]
-power_pred=[]
+power_true_upper=[]
+power_pred_upper=[]
+power_true_lower=[]
+power_pred_lower=[]
 
 for aa in range(len(x_np)):
-    power_true.append(powerspec.get_power_spectrum(y_np[aa]))
-    power_pred.append(powerspec.get_power_spectrum(y_pred_np[aa]))
+    power_true_upper.append(powerspec.get_power_spectrum(y_np[aa][0]))
+    power_pred_upper.append(powerspec.get_power_spectrum(y_pred_np[aa][0]))
+    power_true_lower.append(powerspec.get_power_spectrum(y_np[aa][1]))
+    power_pred_lower.append(powerspec.get_power_spectrum(y_pred_np[aa][1]))
     
-power_true=np.mean(np.stack(power_true,axis=1),axis=1)
-power_pred=np.mean(np.stack(power_pred,axis=1),axis=1)
+power_true_upper_mean=np.mean(np.stack(power_true_upper,axis=1),axis=1)
+power_pred_upper_mean=np.mean(np.stack(power_pred_upper,axis=1),axis=1)
+power_true_upper_err=np.std(np.stack(power_true_upper,axis=1),axis=1)
+power_pred_upper_err=np.std(np.stack(power_pred_upper,axis=1),axis=1)
 
-## Plot power spectrum
-f=plt.title(r"Power spectrum of subgrid forcing: $R^2=%.2f$" % r2 )
-plt.loglog(power_true,label="True")
-plt.loglog(power_pred,label="From CNN")
-plt.legend()
-figure_power=wandb.Image(f)
+power_true_lower_mean=np.mean(np.stack(power_true_lower,axis=1),axis=1)
+power_pred_lower_mean=np.mean(np.stack(power_pred_lower,axis=1),axis=1)
+power_true_lower_err=np.mean(np.stack(power_true_lower,axis=1),axis=1)
+power_pred_lower_err=np.mean(np.stack(power_pred_lower,axis=1),axis=1)
+
+fig, axs = plt.subplots(1, 2,figsize=(11,4))
+axs[0].set_title(r"Power spectrum of S, upper layer: $R^2=%.2f$" % r2_upper )
+axs[0].loglog(power_true_upper_mean,label="True")
+axs[0].loglog(power_pred_upper_mean,label="From CNN")
+axs[0].legend()
+
+axs[1].set_title(r"Power spectrum of S, lower layer: $R^2=%.2f$" % r2_lower )
+axs[1].loglog(power_true_lower_mean,label="True")
+axs[1].loglog(power_pred_lower_mean,label="From CNN")
+
+figure_power=wandb.Image(fig)
 wandb.log({"Power spectrum": figure_power})
 
 map_index=2
 
-fig, axs = plt.subplots(1, 4,figsize=(15,3))
-ax=axs[0].imshow(x_np[map_index], cmap='bwr')
-fig.colorbar(ax, ax=axs[0])
-axs[0].set_xticks([]); axs[0].set_yticks([])
-axs[0].set_title("PV field")
+fig, axs = plt.subplots(2, 4,figsize=(15,6))
+ax=axs[0][0].imshow(x_np[map_index][0], cmap='bwr')
+fig.colorbar(ax, ax=axs[0][0])
+axs[0][0].set_xticks([]); axs[0][0].set_yticks([])
+axs[0][0].set_title("PV field")
 
-ax=axs[1].imshow(y_np[map_index], cmap='bwr', interpolation='none')
-fig.colorbar(ax, ax=axs[1])
-axs[1].set_xticks([]); axs[1].set_yticks([])
-axs[1].set_title("True forcing")
+ax=axs[0][1].imshow(y_np[map_index][0], cmap='bwr', interpolation='none')
+fig.colorbar(ax, ax=axs[0][1])
+axs[0][1].set_xticks([]); axs[0][1].set_yticks([])
+axs[0][1].set_title("True forcing")
 
-ax=axs[2].imshow(y_pred_np[map_index], cmap='bwr', interpolation='none')
-fig.colorbar(ax, ax=axs[2])
-axs[2].set_xticks([]); axs[2].set_yticks([])
-axs[2].set_title("Forcing from CNN")
+ax=axs[0][2].imshow(y_pred_np[map_index][0], cmap='bwr', interpolation='none')
+fig.colorbar(ax, ax=axs[0][2])
+axs[0][2].set_xticks([]); axs[0][2].set_yticks([])
+axs[0][2].set_title("Forcing from CNN")
 
-ax=axs[3].imshow(y_np[map_index]-y_pred_np[map_index], cmap='bwr', interpolation='none')
-fig.colorbar(ax, ax=axs[3])
-axs[3].set_xticks([]); axs[3].set_yticks([])
-axs[3].set_title("True forcing-CNN forcing")
+ax=axs[0][3].imshow(y_np[map_index][0]-y_pred_np[map_index][0], cmap='bwr', interpolation='none')
+fig.colorbar(ax, ax=axs[0][3])
+axs[0][3].set_xticks([]); axs[0][3].set_yticks([])
+axs[0][3].set_title("True forcing-CNN forcing")
+fig.tight_layout()
+
+ax=axs[1][0].imshow(x_np[map_index][1], cmap='bwr')
+fig.colorbar(ax, ax=axs[1][0])
+axs[1][0].set_xticks([]); axs[1][0].set_yticks([])
+
+ax=axs[1][1].imshow(y_np[map_index][1], cmap='bwr', interpolation='none')
+fig.colorbar(ax, ax=axs[1][1])
+axs[1][1].set_xticks([]); axs[1][1].set_yticks([])
+
+ax=axs[1][2].imshow(y_pred_np[map_index][1], cmap='bwr', interpolation='none')
+fig.colorbar(ax, ax=axs[1][2])
+axs[1][2].set_xticks([]); axs[1][2].set_yticks([])
+
+ax=axs[1][3].imshow(y_np[map_index][1]-y_pred_np[map_index][1], cmap='bwr', interpolation='none')
+fig.colorbar(ax, ax=axs[1][3])
+axs[1][3].set_xticks([]); axs[1][3].set_yticks([])
 fig.tight_layout()
 
 figure_fields=wandb.Image(fig)
 wandb.log({"Random fields": figure_fields})
 
-wandb.run.summary["r2_score"]=r2
+div_fig=divergence_dataset.test_model_divergence(model_theta)
+div_fig=wandb.Image(div_fig)
+wandb.log({"Divergence figure": div_fig})
+
+wandb.run.summary["r2_upper"]=r2_upper
+wandb.run.summary["r2_lower"]=r2_lower
 wandb.finish()
