@@ -3,6 +3,7 @@ import os
 import functools
 import torch
 import torch.nn as nn
+import numpy as np
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loops import FitLoop
 
@@ -213,13 +214,24 @@ class AndrewCNN(BaseModel):
 
     def pred(self, x):
         """ Method to call when receiving un-normalised data, when implemented as a pyqg
-            parameterisation """
+            parameterisation. Expects a 3D numpy array """
+
+        x=torch.tensor(x).float()
         ## Map from physical to normalised space using the factors used to train the network
-        x = transforms.normalise_field(x,self.config["q_mean"],self.config["q_std"])
+        ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
+        x_upper = transforms.normalise_field(x[0],self.config["q_mean_upper"],self.config["q_std_upper"])
+        x_lower = transforms.normalise_field(x[1],self.config["q_mean_lower"],self.config["q_std_lower"])
+        #print(x_lower.shape)
+        x = torch.stack((x_upper,x_lower),dim=0).unsqueeze(0)
+
+        #print(x.shape)
 
         ## Use NN to produce a forcing field
         x = self.conv(x)
 
         ## Map back from normalised space to physical units
-        x = transforms.denormalise_field(x,self.config["s_mean"],self.config["s_std"])
-        return x
+        s_upper=transforms.denormalise_field(x[:,0,:,:],self.config["s_mean_upper"],self.config["s_std_upper"])
+        s_lower=transforms.denormalise_field(x[:,1,:,:],self.config["s_mean_lower"],self.config["s_std_lower"])
+
+        s=torch.cat((s_upper,s_lower)).detach().numpy().astype(np.double)
+        return s
