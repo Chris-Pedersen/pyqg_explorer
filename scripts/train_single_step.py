@@ -106,6 +106,7 @@ model_beta=base_model.AndrewCNN(config_beta)
 model_theta.to(device)
 model_beta.to(device)
 
+config["theta learnable parameters"]=sum(p.numel() for p in model.parameters())
 wandb.init(project="pyqg_betanetwork", entity="m2lines",config=config)
 wandb.watch([model_theta,model_beta], log_freq=1)
 
