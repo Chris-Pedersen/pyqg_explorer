@@ -8,6 +8,7 @@ import xarray as xr
 import json
 from scipy.stats import pearsonr
 from pyqg.xarray_output import spatial_dims
+from pyqg.diagnostic_tools import calc_ispec
 import pyqg_subgrid_experiments.dataset as pse_dataset
 
 YEAR = 24*60*60*360.
@@ -60,17 +61,19 @@ FORCING_ATTR_DATABASE = dict(
         long_name="Difference between downscaled high-res tendency and low-res tendency",
         units="second ^-2"
     ),
+    energy_transfer=dict(
+        long_name="Energy transfer as in fig 9c of Pavel's paper",
+        units="m^-1, m^3/second^3"
+    ),
 )
 
 def spatial_var(var, ds):
     return xr.DataArray(var, coords=dict([(d, ds.coords[d]) for d in spatial_dims]), dims=spatial_dims)
 
 def concat_and_convert(datasets, drop_complex=1):
-    print("concat")
     # Concatenate datasets along the time dimension
     d = xr.concat(datasets, dim='time')
     
-    print("diagnostics")
     # Diagnostics get dropped by this procedure since they're only present for
     # part of the timeseries; resolve this by saving the most recent
     # diagnostics (they're already time-averaged so this is ok)
@@ -78,7 +81,6 @@ def concat_and_convert(datasets, drop_complex=1):
         if k not in d:
             d[k] = v.isel(time=-1)
 
-    print("data reduction double -> single")
     # To save on storage, reduce double -> single
     for k,v in d.variables.items():
         if v.dtype == np.float64:
@@ -86,13 +88,50 @@ def concat_and_convert(datasets, drop_complex=1):
         elif v.dtype == np.complex128:
             d[k] = v.astype(np.complex64)
 
-    print("drop complex")
     # Potentially drop complex variables
     if drop_complex:
         complex_vars = [k for k,v in d.variables.items() if np.iscomplexobj(v)]
         d = d.drop_vars(complex_vars)
 
     return d
+
+def add_ispecs(d_cat,snapshots,m):
+    """ For a dataset (d_cat), calculate the isotropic energy transfer and depth-averaged
+    KE, and add these and the isotropic grid to the dataset
+    Doing this at runtime to avoid having to recalculate this quantity constantly later on """
+
+    ## Take last element for most complete average
+    ## Squeeze to fit ispec dims
+    ds_test=snapshots[-1].squeeze()
+    ispec_k,ispec_energy_transfer=calc_ispec(m, (ds_test.KEflux+ds_test.APEflux+ds_test.paramspec).values)
+
+    ## Take depth-averaged quantity
+    avegd=ave_lev(snapshots[-1],m.delta)
+    ispec_k_avegd,ispec_KEspec_avegd=calc_ispec(m, avegd.KEspec.squeeze())
+
+    ## Isotropically averaged spectra to the dataset
+    d_cat=d_cat.assign_coords(coords={"ispec_k":ispec_k})
+    d_cat["ispec_energy_transfer"]=xr.DataArray(ispec_energy_transfer,dims="ispec_k")
+    d_cat["ispec_KEspec_avegd"]=xr.DataArray(ispec_KEspec_avegd,dims="ispec_k")
+
+    return d_cat
+
+def ave_lev(arr: xr.DataArray, delta):
+    '''
+    Average over depth xarray
+    delta = H1/H2
+    H = H1+H2
+    Weights are:
+    Hi[0] = H1/H = H1/(H1+H2)=H1/H2/(H1/H2+1)=delta/(1+delta)
+    Hi[1] = H2/H = H2/(H1+H2)=1/(1+delta)
+    '''
+    if 'lev' in arr.dims:
+        Hi = xr.DataArray([delta/(1+delta), 1/(1+delta)], dims=['lev'])
+        out  = (arr*Hi).sum(dim='lev')
+        out.attrs = arr.attrs
+        return out
+    else:
+        return arr
 
 def initialize_pyqg_model(**kwargs):
     pyqg_kwargs = dict(DEFAULT_PYQG_PARAMS)
@@ -137,10 +176,12 @@ def run_simulation(m, sampling_freq=1000, sampling_dist='uniform'):
     while m.t < m.tmax:
         if m.tc % sampling_freq == 0:
             snapshots.append(m.to_dataset().copy(deep=True))
-            print("Snapshot appended")
         m._step_forward()
-    print("done running")
-    return concat_and_convert(snapshots)
+    ## Concat snapshots into one dataset
+    d_cat=concat_and_convert(snapshots)
+    ## Add ispec online metrics
+    d_cat=add_ispecs(d_cat,snapshots,m)
+    return d_cat
 
 def spectral_filter_and_coarsen(hires_var, m1, m2, filtr='builtin'):
     if not isinstance(m1, pyqg.QGModel):
