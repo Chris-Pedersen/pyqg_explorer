@@ -200,12 +200,18 @@ class AndrewCNN(BaseModel):
         blocks = []
         blocks.extend(make_block(self.config["input_channels"],128,5,self.config["activation"])) #1
         blocks.extend(make_block(128,64,5,self.config["activation"]))                            #2
-        blocks.extend(make_block(64,32,3,self.config["activation"]))                             #3
-        blocks.extend(make_block(32,32,3,self.config["activation"]))                             #4
-        blocks.extend(make_block(32,32,3,self.config["activation"]))                             #5
-        blocks.extend(make_block(32,32,3,self.config["activation"]))                             #6
-        blocks.extend(make_block(32,32,3,self.config["activation"]))                             #7
-        blocks.extend(make_block(32,self.config["output_channels"],3,'False',False))             #8
+        if self.config["conv_layers"]==3:
+            blocks.extend(make_block(64,self.config["output_channels"],3,'False',False))
+        elif self.config["conv_layers"]==4:
+            blocks.extend(make_block(64,32,3,self.config["activation"]))                            
+            blocks.extend(make_block(32,self.config["output_channels"],3,'False',False))
+        else: ## 5 layers or more
+            blocks.extend(make_block(64,32,3,self.config["activation"])) ## 3rd layer
+            for aa in range(4,config["conv_layers"]):
+                ## 4th and above layer
+                blocks.extend(make_block(32,32,3,self.config["activation"]))
+            ## Output layer
+            blocks.extend(make_block(32,self.config["output_channels"],3,'False',False))
         self.conv = nn.Sequential(*blocks)
 
     def forward(self, x):
