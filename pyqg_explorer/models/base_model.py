@@ -198,6 +198,10 @@ class AndrewCNN(BaseModel):
         super().__init__(config)
 
         blocks = []
+        ## If the conv_layers key is missing, we are running
+        ## with an 8 layer CNN
+        if ("conv_layer" in self.config) == False:
+            self.config["conv_layers"]=8
         blocks.extend(make_block(self.config["input_channels"],128,5,self.config["activation"])) #1
         blocks.extend(make_block(128,64,5,self.config["activation"]))                            #2
         if self.config["conv_layers"]==3:
