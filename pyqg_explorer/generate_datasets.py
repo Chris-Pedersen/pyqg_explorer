@@ -11,6 +11,9 @@ from pyqg.xarray_output import spatial_dims
 from pyqg.diagnostic_tools import calc_ispec
 import pyqg_subgrid_experiments.dataset as pse_dataset
 
+import pyqg_explorer.util.misc as misc
+import pyqg_explorer.models.parameterizations as parameterizations
+
 YEAR = 24*60*60*360.
 
 DEFAULT_PYQG_PARAMS = dict(nx=64, dt=3600., tmax=10*YEAR, tavestart=5*YEAR)
@@ -133,7 +136,7 @@ def ave_lev(arr: xr.DataArray, delta):
     else:
         return arr
 
-def initialize_pyqg_model(**kwargs):
+def initialize_pyqg_model(parameterization=None,**kwargs):
     pyqg_kwargs = dict(DEFAULT_PYQG_PARAMS)
     pyqg_kwargs.update(**kwargs)
     ## Check if tmax and tavestart are defined in years or seconds
@@ -142,10 +145,15 @@ def initialize_pyqg_model(**kwargs):
         pyqg_kwargs["tmax"]=pyqg_kwargs["tmax"]*YEAR
     if pyqg_kwargs["tavestart"]<1000:
         pyqg_kwargs["tavestart"]=pyqg_kwargs["tavestart"]*YEAR
-    return pyqg.QGModel(**pyqg_kwargs)
 
-def generate_dataset(sampling_freq=1000, sampling_dist='uniform', **kwargs):
-    m = initialize_pyqg_model(**kwargs)
+    return pyqg.QGModel(parameterization=parameterization,**pyqg_kwargs)
+
+def generate_dataset(sampling_freq=1000, sampling_dist='uniform', parameterization=None, **kwargs):
+    if parameterization is not None:
+        if isinstance(parameterization, str):
+            model_cnn=misc.load_model(parameterization)
+            parameterization=parameterizations.Parameterization(model_cnn)
+    m = initialize_pyqg_model(parameterization=parameterization,**kwargs)
     return run_simulation(m, sampling_freq=sampling_freq, sampling_dist=sampling_dist)
 
 def generate_forcing_dataset(hires=256, lores=64, increment=0, **kw):
