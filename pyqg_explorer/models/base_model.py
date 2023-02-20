@@ -140,3 +140,43 @@ class AndrewCNN(BaseModel):
 
         s=torch.cat((s_upper,s_lower)).detach().numpy().astype(np.double)
         return s
+
+
+def GetResBlock(in_channels,intermediate_channels,kernel_size=3):
+    conv1=nn.Conv2d(in_channels,intermediate_channels,kernel_size,padding="same",padding_mode="circular")
+    conv2=nn.Conv2d(intermediate_channels,in_channels,kernel_size,padding="same",padding_mode="circular")
+    block=[conv1]
+    block.append(nn.ReLU())
+    block.append(nn.BatchNorm2d(intermediate_channels))
+    block.append(conv2)
+    return nn.Sequential(*block)
+
+
+class ResidualBlock(nn.Module):
+    def __init__(self,in_channels,intermediate_channels,out_channels,kernel_size):
+        super().__init__()
+        self.block=nn.ModuleList([*GetResBlock(in_channels,intermediate_channels,kernel_size)])
+        self.batchnorm=nn.BatchNorm2d(in_channels)
+        self.relu=nn.ReLU
+        
+    def forward(self,x):
+        residual=x
+        for layer in self.block:
+            x=layer(x)
+        x+=residual
+        x=torch.nn.functional.relu(x)
+        x=self.batchnorm(x)
+        return x
+
+
+class ResNet(BaseModel):
+    def __init__(self,config,model_beta=None):
+        super().__init__(config,model_beta)
+        self.network=nn.ModuleList([])
+        for aa in range(config["conv_layers"]):
+            self.network.append(ResidualBlock(2,config["intermediate_channels"],2,3))
+        
+    def forward(self,x):
+        for module in self.network:
+            x=module(x)
+        return x

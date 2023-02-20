@@ -6,6 +6,7 @@ import pyqg_explorer.util.transforms as transforms
 from torch.utils.data import Dataset
 
 
+
 class OfflineDataset(Dataset):
     """
     Dataset to prepare q, f and s fields for some given time horizon
