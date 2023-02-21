@@ -132,7 +132,7 @@ class AndrewCNN(BaseModel):
         #print(x.shape)
 
         ## Use NN to produce a forcing field
-        x = self.conv(x)
+        x = self(x)
 
         ## Map back from normalised space to physical units
         s_upper=transforms.denormalise_field(x[:,0,:,:],self.config["s_mean_upper"],self.config["s_std_upper"])
