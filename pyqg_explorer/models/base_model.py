@@ -16,7 +16,7 @@ class BaseModel(LightningModule):
         super().__init__()
         self.config=config
         self.criterion=nn.MSELoss()
-        self.model_beta=model_beta
+        self.model_beta=model_beta ## CNN that predicts the system at some future time
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(),lr=self.config["lr"])
@@ -26,6 +26,7 @@ class BaseModel(LightningModule):
         return nn.MSELoss()(x, y)
 
     def step(self,batch,kind):
+        """ If there is no additional beta network, just perform a standard optimisation """
         x_data, y_data = batch
         output_theta = self(x_data) ## Takes in Q, outputs \hat{S}
         loss = self.criterion(output_theta, y_data)
@@ -33,6 +34,7 @@ class BaseModel(LightningModule):
         return loss
     
     def joint_step(self,batch,kind):
+        """ If we also have a beta network, run joint optimisation """
         x_data, y_data = batch
         output_theta = self(x_data[:,0:2,:,:]) ## Takes in Q, outputs \hat{S}
         output_beta = self.model_beta(torch.cat((x_data[:,0:4,:,:],output_theta),1))
@@ -59,9 +61,11 @@ class BaseModel(LightningModule):
             return self.step(batch,"valid")
     
     def save_model(self):
+        """ Save the model config, and optimised weights and biases. We create a dictionary
+        to hold these two sub-dictionaries, and save it as a pickle file """
         save_dict={}
-        save_dict["state_dict"]=self.state_dict()
-        save_dict["config"]=self.config
+        save_dict["state_dict"]=self.state_dict() ## Dict containing optimised weights and biases
+        save_dict["config"]=self.config           ## Dict containing config for the dataset and model
         save_string=os.path.join(self.config["save_path"],self.config["save_name"])
         with open(save_string, 'wb') as handle:
             pickle.dump(save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -94,10 +98,9 @@ def make_block(in_channels: int, out_channels: int, kernel_size: int,
 class AndrewCNN(BaseModel):
     def __init__(self,config,model_beta=None):
         '''
-        Packs sequence of 8 convolutional layers in a list.
-        First layer has n_in input channels, and last layer has n_out
-        output channels
-
+        Packs sequence of n_conv=config["conv_layers"] convolutional layers in a list.
+        First layer has config["input_channels"] input channels, and last layer has
+        config["output_channels"] output channels
         '''
         super().__init__(config,model_beta)
 
@@ -135,18 +138,16 @@ class AndrewCNN(BaseModel):
         ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
         x_upper = transforms.normalise_field(x[0],self.config["q_mean_upper"],self.config["q_std_upper"])
         x_lower = transforms.normalise_field(x[1],self.config["q_mean_lower"],self.config["q_std_lower"])
-        #print(x_lower.shape)
         x = torch.stack((x_upper,x_lower),dim=0).unsqueeze(0)
 
-        #print(x.shape)
-
-        ## Use NN to produce a forcing field
+        ## Pass the normalised fields through our network
         x = self(x)
 
         ## Map back from normalised space to physical units
         s_upper=transforms.denormalise_field(x[:,0,:,:],self.config["s_mean_upper"],self.config["s_std_upper"])
         s_lower=transforms.denormalise_field(x[:,1,:,:],self.config["s_mean_lower"],self.config["s_std_lower"])
 
+        ## Reshape to match pyqg dimensions, and cast to numpy array
         s=torch.cat((s_upper,s_lower)).detach().numpy().astype(np.double)
         return s
 
