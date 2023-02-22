@@ -57,6 +57,15 @@ class BaseModel(LightningModule):
             return self.joint_step(batch,"valid")
         else:
             return self.step(batch,"valid")
+    
+    def save_model(self):
+        save_dict={}
+        save_dict["state_dict"]=self.state_dict()
+        save_dict["config"]=self.config
+        save_string=os.path.join(self.config["save_path"],self.config["save_name"])
+        with open(save_string, 'wb') as handle:
+            pickle.dump(save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        print("Model saved as %s" % save_string)
 
 
 ## From Andrew/Pavel's code, function to create a CNN block
