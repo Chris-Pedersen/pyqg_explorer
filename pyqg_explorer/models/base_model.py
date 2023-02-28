@@ -258,7 +258,7 @@ class ResNetSingle(BaseModel):
         self.resnets=nn.ModuleList()
         for aa in range(self.num_res_blocks):
             self.resnets.append(NarrowResBlock(self.conv_filters,self.conv_filters,self.conv_filters,3))
-        self.final_conv=nn.Conv2d(64,2,kernel_size=3,padding="same",padding_mode="circular")
+        self.final_conv=nn.Conv2d(self.conv_filters,2,kernel_size=3,padding="same",padding_mode="circular")
         
     def forward(self,x):
         residual=x
@@ -286,7 +286,7 @@ class ResNetChoke(BaseModel):
         super().__init__(config,model_beta)
         self.network=nn.ModuleList([])
         for aa in range(config["conv_layers"]):
-            self.network.append(ResidualBlock(2,config["intermediate_channels"],2,3))
+            self.network.append(ResidualBlock(2,config["conv_filters"],2,3))
         
     def forward(self,x):
         for module in self.network:
