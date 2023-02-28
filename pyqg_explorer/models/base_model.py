@@ -200,7 +200,7 @@ class NarrowResBlock(nn.Module):
         return x
     
     
-class ResNetParallel(base_model.BaseModel):
+class ResNetParallel(BaseModel):
     """ Resnet where the residual blocks run in parallel, after a joint convolutional first layer """
     def __init__(self,config,model_beta=None):
         super().__init__(config,model_beta)
@@ -244,7 +244,7 @@ class ResNetParallel(base_model.BaseModel):
         return x
     
     
-class ResNetSingle(base_model.BaseModel):
+class ResNetSingle(BaseModel):
     """ Resnet with a single channel of residual blocks, splitting each filter set into upper and lower
         residual connections """
     def __init__(self,config,model_beta=None):
