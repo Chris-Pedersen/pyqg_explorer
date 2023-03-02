@@ -19,7 +19,7 @@ class BaseModel(LightningModule):
         self.model_beta=model_beta ## CNN that predicts the system at some future time
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(),lr=self.config["lr"])
+        optimizer = torch.optim.AdamW(self.parameters(),lr=self.config["lr"],weight_decay=self.config["wd"])
         return optimizer
 
     def step(self,batch,kind):
