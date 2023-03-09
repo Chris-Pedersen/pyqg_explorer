@@ -6,7 +6,6 @@ import pyqg_explorer.util.transforms as transforms
 from torch.utils.data import Dataset
 
 
-
 class OfflineDataset(Dataset):
     """
     Dataset to prepare q, f and s fields for some given time horizon
@@ -92,18 +91,14 @@ class OfflineDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        if self.normalise=="proper":
-            ## Return normalised arrays
-            q_upper=transforms.normalise_field(self.x_data[idx][0],self.q_mean_upper,self.q_std_upper)
-            q_lower=transforms.normalise_field(self.x_data[idx][1],self.q_mean_lower,self.q_std_lower)
-            s_upper=transforms.normalise_field(self.y_data[idx][0],self.s_mean_upper,self.s_std_upper)
-            s_lower=transforms.normalise_field(self.y_data[idx][1],self.s_mean_lower,self.s_std_lower)
-            x_out=torch.stack((q_upper,q_lower),dim=0)
-            y_out=torch.stack((s_upper,s_lower),dim=0)
-            return (x_out,y_out)
-        else:
-            ## Return un-normalised arrays
-            return (self.x_data[idx],self.y_data[idx])
+        ## Return normalised arrays
+        q_upper=transforms.normalise_field(self.x_data[idx][0],self.q_mean_upper,self.q_std_upper)
+        q_lower=transforms.normalise_field(self.x_data[idx][1],self.q_mean_lower,self.q_std_lower)
+        s_upper=transforms.normalise_field(self.y_data[idx][0],self.s_mean_upper,self.s_std_upper)
+        s_lower=transforms.normalise_field(self.y_data[idx][1],self.s_mean_lower,self.s_std_lower)
+        x_out=torch.stack((q_upper,q_lower),dim=0)
+        y_out=torch.stack((s_upper,s_lower),dim=0)
+        return (x_out,y_out)
 
 
 class EmulatorDataset(Dataset):
@@ -194,18 +189,15 @@ class EmulatorDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        if self.normalise=="proper":
-            ## Return normalised arrays
-            q_upper=transforms.normalise_field(self.x_data[idx][0],self.q_mean_upper,self.q_std_upper)
-            q_lower=transforms.normalise_field(self.x_data[idx][1],self.q_mean_lower,self.q_std_lower)
-            q_t_upper=transforms.normalise_field(self.y_data[idx][0],self.q_mean_upper,self.q_std_upper)
-            q_t_lower=transforms.normalise_field(self.y_data[idx][1],self.q_mean_lower,self.q_std_lower)
-            x_out=torch.stack((q_upper,q_lower),dim=0)
-            y_out=torch.stack((q_t_upper,q_t_lower),dim=0)
-            return (x_out,y_out)
-        else:
-            ## Return un-normalised arrays
-            return (self.x_data[idx],self.y_data[idx])
+        ## Return normalised arrays
+        q_upper=transforms.normalise_field(self.x_data[idx][0],self.q_mean_upper,self.q_std_upper)
+        q_lower=transforms.normalise_field(self.x_data[idx][1],self.q_mean_lower,self.q_std_lower)
+        q_t_upper=transforms.normalise_field(self.y_data[idx][0],self.q_mean_upper,self.q_std_upper)
+        q_t_lower=transforms.normalise_field(self.y_data[idx][1],self.q_mean_lower,self.q_std_lower)
+        x_out=torch.stack((q_upper,q_lower),dim=0)
+        y_out=torch.stack((q_t_upper,q_t_lower),dim=0)
+        return (x_out,y_out)
+
 
 class TimestepDataset(Dataset):
     """
@@ -292,19 +284,15 @@ class TimestepDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        if self.normalise=="proper":
-            ## Return normalised arrays
-            q_upper=transforms.normalise_field(self.x_data[idx][0],self.q_mean_upper,self.q_std_upper)
-            q_lower=transforms.normalise_field(self.x_data[idx][1],self.q_mean_lower,self.q_std_lower)
-            f_upper=transforms.normalise_field(self.x_data[idx][2],self.f_mean_upper,self.f_std_upper)
-            f_lower=transforms.normalise_field(self.x_data[idx][3],self.f_mean_lower,self.f_std_lower)
-            s_upper=transforms.normalise_field(self.x_data[idx][4],self.s_mean_upper,self.s_std_upper)
-            s_lower=transforms.normalise_field(self.x_data[idx][5],self.s_mean_lower,self.s_std_lower)
-            q_t_upper=transforms.normalise_field(self.y_data[idx][0],self.q_mean_upper,self.q_std_upper)
-            q_t_lower=transforms.normalise_field(self.y_data[idx][1],self.q_mean_lower,self.q_std_lower)
-            x_out=torch.stack((q_upper,q_lower,f_upper,f_lower,s_upper,s_lower),dim=0)
-            y_out=torch.stack((q_t_upper,q_t_lower),dim=0)
-            return (x_out,y_out)
-        else:
-            ## Return un-normalised arrays
-            return (self.x_data[idx],self.y_data[idx])
+        ## Return normalised arrays
+        q_upper=transforms.normalise_field(self.x_data[idx][0],self.q_mean_upper,self.q_std_upper)
+        q_lower=transforms.normalise_field(self.x_data[idx][1],self.q_mean_lower,self.q_std_lower)
+        f_upper=transforms.normalise_field(self.x_data[idx][2],self.f_mean_upper,self.f_std_upper)
+        f_lower=transforms.normalise_field(self.x_data[idx][3],self.f_mean_lower,self.f_std_lower)
+        s_upper=transforms.normalise_field(self.x_data[idx][4],self.s_mean_upper,self.s_std_upper)
+        s_lower=transforms.normalise_field(self.x_data[idx][5],self.s_mean_lower,self.s_std_lower)
+        q_t_upper=transforms.normalise_field(self.y_data[idx][0],self.q_mean_upper,self.q_std_upper)
+        q_t_lower=transforms.normalise_field(self.y_data[idx][1],self.q_mean_lower,self.q_std_lower)
+        x_out=torch.stack((q_upper,q_lower,f_upper,f_lower,s_upper,s_lower),dim=0)
+        y_out=torch.stack((q_t_upper,q_t_lower),dim=0)
+        return (x_out,y_out)
