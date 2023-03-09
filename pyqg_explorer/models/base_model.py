@@ -8,6 +8,24 @@ from pytorch_lightning import LightningModule
 from pytorch_lightning.loops import FitLoop
 import pyqg_explorer.util.transforms as transforms
 
+## Default config
+config={"lev":"both",
+        "seed":123,
+        "drop_spin_up":True,
+        "lr":0.001,
+        "wd":0.01,
+        "batch_size":64,
+        "input_channels":2,
+        "output_channels":2,
+        "activation":"ReLU",
+        "save_name":None,
+        "save_path":None,
+        "arch":None,
+        "conv_layers":12,
+        "beta_steps":None,
+        "epochs":200,
+        "subsample":None}
+
 
 class BaseModel(LightningModule):
     """ Class to store core model methods """
@@ -59,6 +77,9 @@ class BaseModel(LightningModule):
     def save_model(self):
         """ Save the model config, and optimised weights and biases. We create a dictionary
         to hold these two sub-dictionaries, and save it as a pickle file """
+        if self.config["save_path"] is None:
+            print("No save path provided, not saving")
+            return
         save_dict={}
         save_dict["state_dict"]=self.state_dict() ## Dict containing optimised weights and biases
         save_dict["config"]=self.config           ## Dict containing config for the dataset and model
@@ -66,6 +87,7 @@ class BaseModel(LightningModule):
         with open(save_string, 'wb') as handle:
             pickle.dump(save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
         print("Model saved as %s" % save_string)
+        return
 
     def pred(self, x):
         """ Method to call when receiving un-normalised data, when implemented as a pyqg
