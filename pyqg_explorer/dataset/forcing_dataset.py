@@ -10,7 +10,7 @@ class OfflineDataset(Dataset):
     """
     Dataset to prepare q, f and s fields for some given time horizon
     """
-    def __init__(self,file_path,seed=42,normalise="proper",subsample=None,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,file_path,seed=42,subsample=None,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
         file_path:   path to data
         seed:        random seed used to create train/valid/test splits
@@ -105,7 +105,7 @@ class EmulatorDataset(Dataset):
     """
     Dataset to prepare q, f and s fields for some given time horizon
     """
-    def __init__(self,file_path,seed=42,normalise="proper",subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,file_path,seed=42,subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
         file_path:     path to data
         seed:          random seed used to create train/valid/test splits
@@ -203,7 +203,7 @@ class TimestepDataset(Dataset):
     """
     Dataset to prepare q, f and s fields for some given time horizon
     """
-    def __init__(self,file_path,seed=42,normalise="proper",subsample=None,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,file_path,seed=42,subsample=None,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
         file_path:   path to data
         seed:        random seed used to create train/valid/test splits
