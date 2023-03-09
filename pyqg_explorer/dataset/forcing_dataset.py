@@ -45,7 +45,6 @@ class OfflineDataset(Dataset):
         self.train_ratio=train_ratio
         self.valid_ratio=valid_ratio
         self.test_ratio=test_ratio
-        self.normalise=normalise
         self.rng = np.random.default_rng(seed)
 
         self.len=len(self.x_data)
@@ -145,7 +144,6 @@ class EmulatorDataset(Dataset):
         self.train_ratio=train_ratio
         self.valid_ratio=valid_ratio
         self.test_ratio=test_ratio
-        self.normalise=normalise
         self.rng = np.random.default_rng(seed)
 
         self.len=len(self.x_data)
@@ -241,7 +239,6 @@ class TimestepDataset(Dataset):
         self.train_ratio=train_ratio
         self.valid_ratio=valid_ratio
         self.test_ratio=test_ratio
-        self.normalise=normalise
         self.rng = np.random.default_rng(seed)
 
         self.len=len(self.x_data)
