@@ -139,7 +139,7 @@ class ResNetChoke(base_model.BaseModel):
     def __init__(self,config,model_beta=None):
         super().__init__(config,model_beta)
         self.network=nn.ModuleList([])
-        for aa in range(config["conv_layers"]):
+        for aa in range(config["residual_blocks"]):
             self.network.append(ResidualBlock(2,config["conv_filters"],2,3))
         
     def forward(self,x):
