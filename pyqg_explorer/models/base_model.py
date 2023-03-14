@@ -29,9 +29,10 @@ config={"lev":"both",
 
 class BaseModel(LightningModule):
     """ Class to store core model methods """
-    def __init__(self,config:dict,model_beta=None):
+    def __init__(self,config:dict,model_beta=None,residual=False):
         super().__init__()
         self.config=config
+        self.residual=residual
         self.criterion=nn.MSELoss()
         self.model_beta=model_beta ## CNN that predicts the system at some future time
 
@@ -60,12 +61,9 @@ class BaseModel(LightningModule):
             
             ## Transform from residual space to physical space
             up_phys=transforms.denormalise_field(up,self.config["res_mean_lower"],self.config["res_std_lower"])+transforms.denormalise_field(x_data[:,0,:,:],self.config["q_mean_lower"],self.config["q_std_lower"])
-
             up_norm=transforms.normalise_field(up_phys,self.config["q_mean_lower"],self.config["q_std_lower"])
-
             ## Transform from residual space to physical space
             low_phys=transforms.denormalise_field(low,self.config["res_mean_lower"],self.config["res_std_lower"])+transforms.denormalise_field(x_data[:,1,:,:],self.config["q_mean_lower"],self.config["q_std_lower"])
-
             low_norm=transforms.normalise_field(low_phys,self.config["q_mean_lower"],self.config["q_std_lower"])
 
             return torch.cat((low_norm.unsqueeze(1),low_norm.unsqueeze(1)),1)
@@ -98,6 +96,8 @@ class BaseModel(LightningModule):
         if self.model_beta is not None:
             self.model_beta.train()
             return self.joint_step(batch,"train")
+        elif self.residual==True:
+            self.residual_step(batch, "train")
         else:
             return self.step(batch,"train")
 
@@ -105,6 +105,8 @@ class BaseModel(LightningModule):
         if self.model_beta is not None:
             self.model_beta.eval()
             return self.joint_step(batch,"valid")
+        elif self.residual==True:
+            self.residual_step(batch, "valid")
         else:
             return self.step(batch,"valid")
     

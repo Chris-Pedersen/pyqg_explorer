@@ -27,13 +27,13 @@ def make_block(in_channels: int, out_channels: int, kernel_size: int,
 
 
 class FCNN(base_model.BaseModel):
-    def __init__(self,config,model_beta=None):
+    def __init__(self,config,model_beta=None,residual=False):
         '''
         Packs sequence of n_conv=config["conv_layers"] convolutional layers in a list.
         First layer has config["input_channels"] input channels, and last layer has
         config["output_channels"] output channels
         '''
-        super().__init__(config,model_beta)
+        super().__init__(config,model_beta,residual)
 
         blocks = []
         ## If the conv_layers key is missing, we are running

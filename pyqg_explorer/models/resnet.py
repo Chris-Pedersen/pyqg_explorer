@@ -56,8 +56,8 @@ class NarrowResBlock(nn.Module):
 ####################### ResNet architectures #######################
 class ResNetParallel(base_model.BaseModel):
     """ Resnet where the residual blocks run in parallel, after a joint convolutional first layer """
-    def __init__(self,config,model_beta=None):
-        super().__init__(config,model_beta)
+    def __init__(self,config,model_beta=None,residual=False):
+        super().__init__(config,model_beta,residual)
         self.num_res_blocks=config["residual_blocks"]
         self.conv_filters=config["conv_filters"]
         self.first_conv=nn.Conv2d(config["input_channels"],128,kernel_size=3,padding="same",padding_mode="circular")
@@ -101,8 +101,8 @@ class ResNetParallel(base_model.BaseModel):
 class ResNetSingle(base_model.BaseModel):
     """ Resnet with a single channel of residual blocks, splitting each filter set into upper and lower
         residual connections """
-    def __init__(self,config,model_beta=None):
-        super().__init__(config,model_beta)
+    def __init__(self,config,model_beta=None,residual=False):
+        super().__init__(config,model_beta,residual)
         self.num_res_blocks=config["residual_blocks"]
         self.conv_filters=config["conv_filters"]
         self.first_conv=nn.Conv2d(config["input_channels"],128,kernel_size=3,padding="same",padding_mode="circular")
@@ -136,8 +136,8 @@ class ResNetSingle(base_model.BaseModel):
 class ResNetChoke(base_model.BaseModel):
     """ Resnet where each residual block is collapsed down to two channels, one for upper and one for
         lower layer """
-    def __init__(self,config,model_beta=None):
-        super().__init__(config,model_beta)
+    def __init__(self,config,model_beta=None,residual=False):
+        super().__init__(config,model_beta,residual)
         self.network=nn.ModuleList([])
         for aa in range(config["residual_blocks"]):
             self.network.append(ResidualBlock(2,config["conv_filters"],2,3))
