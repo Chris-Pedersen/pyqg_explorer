@@ -46,7 +46,41 @@ class BaseModel(LightningModule):
         loss = self.criterion(output_theta, y_data)
         self.log(f"{kind}_loss", loss, on_step=False, on_epoch=True)       
         return loss
-    
+
+    def residual_step(self,batch,kind):
+        """ Loss here is defined with respect to the residuals """
+
+        x_data, y_data = batch
+        output_theta = self(x_data) ## Takes in Q, outputs \hat{S}
+        loss = self.criterion(output_theta, y_data)
+
+        def map_residual_to_q(field):
+            up=field[:,0,:,:]
+            low=field[:,1,:,:]
+            
+            ## Transform from residual space to physical space
+            up_phys=transforms.denormalise_field(up,self.config["res_mean_lower"],self.config["res_std_lower"])+transforms.denormalise_field(x_data[:,0,:,:],self.config["q_mean_lower"],self.config["q_std_lower"])
+
+            up_norm=transforms.normalise_field(up_phys,self.config["q_mean_lower"],self.config["q_std_lower"])
+
+            ## Transform from residual space to physical space
+            low_phys=transforms.denormalise_field(low,self.config["res_mean_lower"],self.config["res_std_lower"])+transforms.denormalise_field(x_data[:,1,:,:],self.config["q_mean_lower"],self.config["q_std_lower"])
+
+            low_norm=transforms.normalise_field(low_phys,self.config["q_mean_lower"],self.config["q_std_lower"])
+
+            return torch.cat((low_norm.unsqueeze(1),low_norm.unsqueeze(1)),1)
+
+        ## Take prediction, map to physical space, add original field
+        norm_true=map_residual_to_q(output_theta)
+        norm_pred=map_residual_to_q(y_data)
+
+        normal_loss=self.criterion(norm_true,norm_pred)
+
+        ## Map this loss to a normalised loss 
+        self.log(f"{kind}_residual_loss", loss, on_step=False, on_epoch=True)
+        self.log(f"{kind}_loss", normal_loss, on_step=False, on_epoch=True) 
+        return loss
+
     def joint_step(self,batch,kind):
         """ If we also have a beta network, run joint optimisation """
         x_data, y_data = batch
