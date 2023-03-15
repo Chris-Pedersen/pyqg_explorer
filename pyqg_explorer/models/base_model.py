@@ -58,15 +58,15 @@ class BaseModel(LightningModule):
         def map_residual_to_q(field):
             up=field[:,0,:,:]
             low=field[:,1,:,:]
-            
+
             ## Transform from residual space to physical space
-            up_phys=transforms.denormalise_field(up,self.config["res_mean_lower"],self.config["res_std_lower"])+transforms.denormalise_field(x_data[:,0,:,:],self.config["q_mean_lower"],self.config["q_std_lower"])
-            up_norm=transforms.normalise_field(up_phys,self.config["q_mean_lower"],self.config["q_std_lower"])
+            up_phys=transforms.denormalise_field(up,self.config["res_mean_upper"],self.config["res_std_upper"])+transforms.denormalise_field(x_data[:,0,:,:],self.config["q_mean_upper"],self.config["q_std_upper"])
+            up_norm=transforms.normalise_field(up_phys,self.config["q_mean_upper"],self.config["q_std_upper"])
             ## Transform from residual space to physical space
             low_phys=transforms.denormalise_field(low,self.config["res_mean_lower"],self.config["res_std_lower"])+transforms.denormalise_field(x_data[:,1,:,:],self.config["q_mean_lower"],self.config["q_std_lower"])
             low_norm=transforms.normalise_field(low_phys,self.config["q_mean_lower"],self.config["q_std_lower"])
 
-            return torch.cat((low_norm.unsqueeze(1),low_norm.unsqueeze(1)),1)
+            return torch.cat((up_norm.unsqueeze(1),low_norm.unsqueeze(1)),1)
 
         ## Take prediction, map to physical space, add original field
         norm_true=map_residual_to_q(output_theta)
@@ -97,7 +97,7 @@ class BaseModel(LightningModule):
             self.model_beta.train()
             return self.joint_step(batch,"train")
         elif self.residual==True:
-            self.residual_step(batch, "train")
+            return self.residual_step(batch, "train")
         else:
             return self.step(batch,"train")
 
@@ -106,7 +106,7 @@ class BaseModel(LightningModule):
             self.model_beta.eval()
             return self.joint_step(batch,"valid")
         elif self.residual==True:
-            self.residual_step(batch, "valid")
+            return self.residual_step(batch, "valid")
         else:
             return self.step(batch,"valid")
     
