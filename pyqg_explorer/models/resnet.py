@@ -167,7 +167,7 @@ class ResNetChoke(base_model.BaseModel):
         return x
 
 
-class ResNetLinear(BaseModel):
+class ResNetLinear(base_model.BaseModel):
     """ Resnet where each residual block is collapsed down to two channels, one for upper and one for
         lower layer """
     def __init__(self,config,model_beta=None,residual=False):
