@@ -38,7 +38,8 @@ class BaseModel(LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(),lr=self.config["lr"],weight_decay=self.config["wd"])
-        return optimizer
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=10)
+        return {"optimizer": optimizer, "lr_scheduler": scheduler,"monitor": "train_loss"}
 
     def step(self,batch,kind):
         """ If there is no additional beta network, just perform a standard optimisation """
