@@ -1,18 +1,24 @@
-
 import torch
 import torch.nn as nn
 import pyqg_explorer.models.base_model as base_model
 
 
 ####################### Various residual block components #######################
-def GetConvBlock(in_channels,intermediate_channels,out_channels,kernel_size=3,dropout=0.0):
-    conv1=nn.Conv2d(in_channels,intermediate_channels,kernel_size,padding="same",padding_mode="circular")
+def GetConvBlock(in_channels,intermediate_channels,out_channels,kernel_size=3,conv_layers=2,dropout=0.0):
+    ## Construct first and last convolutional layers (always have at least 2)
+    conv_in=nn.Conv2d(in_channels,intermediate_channels,kernel_size,padding="same",padding_mode="circular")
     dropout=nn.Dropout2d(dropout)
-    conv2=nn.Conv2d(intermediate_channels,out_channels,kernel_size,padding="same",padding_mode="circular")
-    block=[conv1]
+    conv_out=nn.Conv2d(intermediate_channels,out_channels,kernel_size,padding="same",padding_mode="circular")
+    block=[conv_in]
+    ## If num_blocks>2, add additional intermediate layers
+    for aa in range(2,conv_layers):
+        intermediate_conv=nn.Conv2d(intermediate_channels,intermediate_channels,kernel_size,padding="same",padding_mode="circular")
+        block.append(nn.ReLU())
+        block.append(nn.BatchNorm2d(intermediate_channels))
+        block.append(intermediate_conv)
     block.append(nn.ReLU())
     block.append(nn.BatchNorm2d(intermediate_channels))
-    block.append(conv2)
+    block.append(conv_out)
     return nn.Sequential(*block)
 
     
@@ -40,10 +46,10 @@ class ResidualBlock(nn.Module):
     """ Stacks 2 convolutional layers with a residual connection, forming a single
         residual block. Here the nonlinearity and batchnorm is applied *before*
         the residual connection, following 1603.05027 and 1605.07146 """
-    def __init__(self,in_channels,intermediate_channels,out_channels,kernel_size,dropout=0.0):
+    def __init__(self,in_channels,intermediate_channels,out_channels,kernel_size,conv_layers=2,dropout=0.0):
         super().__init__()
         self.batchnorm=nn.BatchNorm2d(in_channels)
-        self.conv3x3=nn.ModuleList([*GetConvBlock(in_channels,intermediate_channels,out_channels,kernel_size,dropout)])
+        self.conv3x3=nn.ModuleList([*GetConvBlock(in_channels,intermediate_channels,out_channels,kernel_size,conv_layers,dropout)])
         
     def forward(self,x):
         residual=x
@@ -63,7 +69,7 @@ class ResNet(base_model.BaseModel):
         super().__init__(config,model_beta,residual)
         self.network=nn.ModuleList([])
         for aa in range(config["residual_blocks"]):
-            self.network.append(ResidualBlock(2,config["conv_filters"],2,3))
+            self.network.append(ResidualBlock(2,config["conv_filters"],2,3,config["conv_layers"],config["dropout"]))
         
     def forward(self,x):
         for module in self.network:
