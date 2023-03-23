@@ -5,8 +5,9 @@ import pyqg_explorer.models.base_model as base_model
 
 
 ####################### Various residual block objects #######################
-def GetConvBlock(in_channels,intermediate_channels,out_channels,kernel_size=3):
+def GetConvBlock(in_channels,intermediate_channels,out_channels,kernel_size=3,dropout=0.0):
     conv1=nn.Conv2d(in_channels,intermediate_channels,kernel_size,padding="same",padding_mode="circular")
+    dropout=nn.Dropout2d(dropout)
     conv2=nn.Conv2d(intermediate_channels,out_channels,kernel_size,padding="same",padding_mode="circular")
     block=[conv1]
     block.append(nn.ReLU())
@@ -44,12 +45,12 @@ class NarrowResBlock(nn.Module):
         
     def forward(self,x):
         residual=x
+        x=torch.nn.functional.relu(x)
+        x=self.batchnorm(x)
         for layer in self.conv3x3:
             x=layer(x)
         ## "Narrow" residual connection
         x=torch.cat(((x[:,:self.cut_idx,:,:]+residual[:,0,:,:].unsqueeze(1)),x[:,self.cut_idx:,:,:]+residual[:,0,:,:].unsqueeze(1)),dim=1)
-        x=torch.nn.functional.relu(x)
-        x=self.batchnorm(x)
         return x
 
 
@@ -59,8 +60,8 @@ class LinearResidualBlock(nn.Module):
         the residual connection """
     def __init__(self,in_channels,intermediate_channels,out_channels,kernel_size):
         super().__init__()
-        self.conv3x3=nn.ModuleList([*GetConvBlock(in_channels,intermediate_channels,out_channels,kernel_size)])
         self.batchnorm=nn.BatchNorm2d(in_channels)
+        self.conv3x3=nn.ModuleList([*GetConvBlock(in_channels,intermediate_channels,out_channels,kernel_size)])
         
     def forward(self,x):
         residual=x
