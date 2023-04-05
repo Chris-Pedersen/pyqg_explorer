@@ -44,3 +44,5 @@ def map_residual_to_q(model,field,x_data):
     low_norm=normalise_field(low_phys,model.config["q_mean_lower"],model.config["q_std_lower"])
 
     return torch.cat((up_norm.unsqueeze(1),low_norm.unsqueeze(1)),1)
+
+    
