@@ -1,7 +1,6 @@
 
 import torch
 import torch.nn as nn
-import pyqg_explorer.models.base_model as base_model
 
 ## From Andrew/Pavel's code, function to create a CNN block
 def make_block(in_channels: int, out_channels: int, kernel_size: int, 
@@ -26,14 +25,15 @@ def make_block(in_channels: int, out_channels: int, kernel_size: int,
     return block
 
 
-class FCNN(base_model.BaseModel):
-    def __init__(self,config,model_beta=None,residual=False):
+class FCNN(nn.Module):
+    def __init__(self,config):
         '''
         Packs sequence of n_conv=config["conv_layers"] convolutional layers in a list.
         First layer has config["input_channels"] input channels, and last layer has
         config["output_channels"] output channels
         '''
-        super().__init__(config,model_beta,residual)
+        super().__init__()
+        self.config=config
 
         blocks = []
         ## If the conv_layers key is missing, we are running

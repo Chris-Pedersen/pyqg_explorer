@@ -1,7 +1,5 @@
 import torch
 import torch.nn as nn
-import pyqg_explorer.models.base_model as base_model
-
 
 ####################### Various residual block components #######################
 def GetConvBlock(in_channels,intermediate_channels,out_channels,kernel_size=3,conv_layers=2,dropout=0.0):
@@ -62,11 +60,12 @@ class ResidualBlock(nn.Module):
 
 
 ####################### ResNet architectures #######################
-class ResNet(base_model.BaseModel):
+class ResNet(nn.Module):
     """ Resnet where each residual block is collapsed down to two channels, one for upper and one for
         lower layer """
-    def __init__(self,config,model_beta=None,residual=False):
-        super().__init__(config,model_beta,residual)
+    def __init__(self,config):
+        super().__init__()
+        self.config-config
         self.network=nn.ModuleList([])
         for aa in range(config["residual_blocks"]):
             self.network.append(ResidualBlock(2,config["conv_filters"],2,3,config["conv_layers"],config["dropout"]))
@@ -77,7 +76,7 @@ class ResNet(base_model.BaseModel):
         return x
 
 
-class WideResNet(base_model.BaseModel):
+class WideResNet(nn.Module):
     """ Resnet where we have a larger number of intermediate convolutional layers - using skip connections
         from the upper layer to the first half of the intermediate fields, and from the lower layer to the second
         half. This mapping is performed in the torch.cat line of the WideResidualBlock.
@@ -87,11 +86,12 @@ class WideResNet(base_model.BaseModel):
         and lower layer prediction would struggle to map the identity. So setting this as NotImplemented for now
         and will delete it down the line if we don't come back to it."""
 
-    def __init__(self,config,model_beta=None,residual=False):
-        super().__init__(config,model_beta,residual)
+    def __init__(self,config):
+        super().__init__()
+        self.config=config
         self.network=nn.ModuleList([])
         for aa in range(config["residual_blocks"]):
             self.network.append(WideResidualBlock(2,config["conv_filters"],2,3),config["dropout"])
         
     def forward(self,x):
-        raise NotImplementedError
+        raise NotImplementedError("See docstring")
