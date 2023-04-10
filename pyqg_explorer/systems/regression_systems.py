@@ -13,7 +13,6 @@ import pyqg_explorer.util.transforms as transforms
 config={## Dastaset config
         "seed":123,
         "subsample":None,
-
         "drop_spin_up":True,
         ## Training hyperparams
         "lr":0.001,
@@ -21,6 +20,7 @@ config={## Dastaset config
         "dropout":0.05,
         "batch_size":64,
         "epochs":200,
+        "scheduler":True,
         ## Model config
         "input_channels":2,
         "output_channels":2,
@@ -43,9 +43,13 @@ class BaseRegSytem(LightningModule):
         return self.network(x)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(),lr=self.config["lr"],weight_decay=self.config["wd"])
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=10)
-        return {"optimizer": optimizer, "lr_scheduler": scheduler,"monitor": "train_loss"}
+        optimizer=torch.optim.AdamW(self.parameters(),lr=self.config["lr"],weight_decay=self.config["wd"])
+        if self.config["scheduler"]:
+            scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=10)
+            return {"optimizer": optimizer, "lr_scheduler": scheduler,"monitor": "train_loss"}
+        else:
+            return {"optimizer": optimizer}
+        
 
     def step(self,batch,kind):
         raise NotImplementedError("To be defined by child class")
