@@ -65,10 +65,10 @@ class ResNet(nn.Module):
         lower layer """
     def __init__(self,config):
         super().__init__()
-        self.config-config
+        self.config=config
         self.network=nn.ModuleList([])
         for aa in range(config["residual_blocks"]):
-            self.network.append(ResidualBlock(2,config["conv_filters"],2,3,config["conv_layers"],config["dropout"]))
+            self.network.append(ResidualBlock(2,self.config["conv_filters"],2,3,self.config["conv_layers"],self.config["dropout"]))
         
     def forward(self,x):
         for module in self.network:
