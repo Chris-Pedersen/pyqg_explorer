@@ -7,14 +7,13 @@ from torch.utils.data import Dataset
 
 
 class BaseDataset(Dataset):
-    def __init__(self,seed=42,subsample=None,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,seed=42,subsample=None,drop_spin_up=True,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         super().__init__()
         self.train_ratio=train_ratio
         self.valid_ratio=valid_ratio
         self.test_ratio=test_ratio
         self.subsample=subsample
         self.rng = np.random.default_rng(seed)
-        
 
     def _get_split_indices(self):
         """ Set indices for train, valid and test splits """
