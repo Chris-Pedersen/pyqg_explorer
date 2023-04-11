@@ -2,7 +2,7 @@ import numpy as np
 import io
 import torch
 import pickle
-import pyqg_explorer.models.base_model as base_model
+import pyqg_explorer.models.fcnn as fcnn
 import xarray as xr
 
 """ Store some miscellaneous helper methods that are frequently used """
@@ -26,10 +26,11 @@ def load_model(file_string):
             model_dict = pickle.load(fp)
         else:
             model_dict = CPU_Unpickler(fp).load()
-    model=base_model.AndrewCNN(model_dict["config"])
+    ## Hardcoded to only work with FCNN for now. The loading of state_dict
+    ## should flag errors if we accidentally try and load something else though
+    model=fcnn.FCNN(model_dict["config"])
     model.load_state_dict(model_dict["state_dict"])
     return model
-
 
 ########################## Filtering functions ###########################
 def spectral_filter_and_coarsen(hires_var, m1, m2, filtr='builtin'):
