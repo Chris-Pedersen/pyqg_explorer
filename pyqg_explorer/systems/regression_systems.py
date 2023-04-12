@@ -134,6 +134,24 @@ class JointRegressionSystem(BaseRegSytem):
 
 
 class ResidualRegressionSystem(BaseRegSytem):
+    """ Define loss with respect to the residuals. Expect y_data *not* to be
+    a residual value, but calculate residuals in the loss """
+    def __init__(self,network,config:dict):
+        super().__init__(network,config)
+
+    def step(self,batch,kind):
+        """ Evaluate loss function """
+        x_data, y_data = batch
+        output_theta = self(x_data) 
+        loss = self.criterion(output_theta, y_data-x_data[:,0:2,:,:])
+        loss_norm = self.criterion(output_theta+x_data[:,0:2,:,:], y_data)
+        self.log(f"{kind}_loss", loss_norm, on_step=False, on_epoch=True)
+        self.log(f"{kind}_target_loss", loss, on_step=False, on_epoch=True) 
+        return loss
+
+
+class ResidualRegressionSystemStd(BaseRegSytem):
+    """ Expect y_data to be a residual value, independently normalised """
     def __init__(self,network,config:dict):
         super().__init__(network,config)
 
@@ -141,7 +159,7 @@ class ResidualRegressionSystem(BaseRegSytem):
         """ Loss here is defined with respect to the residuals """
 
         x_data, y_data = batch
-        output_theta = self(x_data) ## Takes in Q, outputs \hat{S}
+        output_theta = self(x_data)
         loss = self.criterion(output_theta, y_data)
 
         def map_residual_to_q(field):
