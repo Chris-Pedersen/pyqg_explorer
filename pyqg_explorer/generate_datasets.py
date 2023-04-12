@@ -372,6 +372,33 @@ def run_forcing_simulations(m1, m2, increment, sampling_freq=1000, sampling_dist
     # Concatenate the datasets along the time dimension
     return concat_and_convert(snapshots).assign_attrs(hires=m1.nx, lores=m2.nx)
 
+def generate_parameterized_dataset(sampling_freq=1000, sampling_dist='uniform', parameterization=None, increment=0, **kwargs):
+    if parameterization is not None:
+        if isinstance(parameterization, str):
+            model_cnn=misc.load_model(parameterization)
+            parameterization=parameterizations.Parameterization(model_cnn)
+    m = initialize_pyqg_model(parameterization=parameterization,**kwargs)
+    return run_parameterized_simulation(m, sampling_freq=sampling_freq, increment=increment, sampling_dist=sampling_dist)
+
+
+def run_parameterized_simulation(m, sampling_freq=1000, increment=0, sampling_dist='uniform'):
+    snapshots = []
+    while m.t < m.tmax:
+        if ((m.tc % sampling_freq == 0) or (m.tc % sampling_freq == increment)) and m.tc>500:
+            snapshots.append(m.to_dataset().copy(deep=True))
+            def save_var(key, val):
+                zero = snapshots[-1].q*0
+                if len(val.shape) == 3: val = val[np.newaxis]
+                snapshots[-1][key] = zero + val
+            forcing=m.q_parameterization.get_cached_forcing()
+            save_var("q_subgrid_forcing",forcing)
+        m._step_forward()
+    ## Concat snapshots into one dataset
+    d_cat=concat_and_convert(snapshots)
+    ## Add ispec online metrics
+    d_cat=add_ispecs(d_cat,snapshots,m)
+    return d_cat
+
 def correlation_decay_curve(m1, m2, thresh=0.25, perturbation_sd=1e-10, max_timesteps=100000, coarsening='spectral', **kw):
     def coarsened(hires_var):
         if coarsening == 'spectral':
@@ -416,6 +443,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--save_to', type=str)
     parser.add_argument('--run_number', type=int)
+    parser.add_argument('--parameterization', action="store_true")
     args, extra = parser.parse_known_args()
 
     # Setup parameters for dataset generation functions
@@ -430,11 +458,18 @@ if __name__ == '__main__':
     files = [f.strip() for f in args.save_to.split(',')]
     files = [f for f in files if f]
 
+    if args.parameterization:
+        model_cnn=misc.load_model("/scratch/cp3759/pyqg_data/models/cnn_theta_ONLY_forcing1_both_epoch200.pt")
+        parameterization=parameterizations.Parameterization(model_cnn,cache_forcing=True)
+
     for save_file in files:
         ## Add run number to save file name
         save_file=list(save_file)
         save_file.insert(-3,str(args.run_number))
         save_file="".join(save_file)
         os.system(f"mkdir -p {os.path.dirname(os.path.realpath(save_file))}")
-        ds = generate_forcing_dataset(**kwargs)
+        if args.parameterization:
+            ds = generate_parameterized_dataset(parameterization=parameterization,increment=args.increment)
+        else:
+            ds = generate_forcing_dataset(**kwargs)
         ds.to_netcdf(save_file)
