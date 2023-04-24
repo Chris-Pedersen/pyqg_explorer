@@ -12,7 +12,7 @@ from pyqg.diagnostic_tools import calc_ispec
 import pyqg_subgrid_experiments.dataset as pse_dataset
 
 import pyqg_explorer.util.misc as misc
-import pyqg_explorer.models.parameterizations as parameterizations
+import pyqg_explorer.parameterizations.parameterizations as parameterizations
 
 YEAR = 24*60*60*360.
 

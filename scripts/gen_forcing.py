@@ -1,7 +1,7 @@
 import argparse
 import os
 import pyqg_explorer.generate_datasets as generate_datasets
-import pyqg_explorer.models.parameterizations as parameterizations
+import pyqg_explorer.parameterizations.parameterizations as parameterizations
 import pyqg_explorer.util.misc as misc
 
 parser = argparse.ArgumentParser()
