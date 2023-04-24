@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pyqg_explorer.util.transforms as transforms
+import os
+import pickle
 
 ## From Andrew/Pavel's code, function to create a CNN block
 def make_block(in_channels: int, out_channels: int, kernel_size: int, 
@@ -16,18 +18,17 @@ def make_block(in_channels: int, out_channels: int, kernel_size: int,
     block = [conv]
     if ReLU == 'ReLU':
         block.append(nn.ReLU())
-    if ReLU == 'SiLU':
+    elif ReLU == 'SiLU':
         block.append(nn.SiLU())
     elif ReLU == 'LeakyReLU':
         block.append(nn.LeakyReLU(0.2))
     elif ReLU == 'False':
         pass
     else:
-        print('Error: wrong ReLU parameter')
+        print('Error: wrong ReLU parameter:')
     if batch_norm:
         block.append(nn.BatchNorm2d(out_channels))
     return block
-
 
 
 class FCNN(nn.Module):
