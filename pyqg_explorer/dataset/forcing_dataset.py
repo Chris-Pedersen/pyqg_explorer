@@ -257,21 +257,59 @@ class EmulatorForcingDataset(BaseDataset):
     """
     x_data is q_i, y_data is q_{i+dt}
     """
-    def __init__(self,file_path,seed=42,subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,file_path,subgrid_models=["CNN","ZB","BScat"],seed=42,subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
-        file_path:     path to data
-        seed:          random seed used to create train/valid/test splits
-        normalise:     "proper" to normalise fields to zero mean and unit variance
-        subsample:     None or int: if int, subsample the dataset to a total of N=subsample maps
-        drop_spin_up:  Drop all snapshots taken during the spin-up phase
-        train_ratio:   proportion of dataset to use as training data
-        valid_ratio:   proportion of dataset to use as validation data
-        test_ratio:    proportion of dataset to use as test data
+        file_path:       path to data
+        subgrid_models:  List containing subgrid models: can have any of: ["CNN", "ZB", "BScat"]
+        seed:            random seed used to create train/valid/test splits
+        normalise:       "proper" to normalise fields to zero mean and unit variance
+        subsample:       None or int: if int, subsample the dataset to a total of N=subsample maps
+        drop_spin_up:    Drop all snapshots taken during the spin-up phase
+        train_ratio:     proportion of dataset to use as training data
+        valid_ratio:     proportion of dataset to use as validation data
+        test_ratio:      proportion of dataset to use as test data
         
         """
         super().__init__()
         
         self.drop_spin_up=drop_spin_up
+        self.subgrid_models=subgrid_models
+        self.file_path=file_path
+        self.subsample=subsample
+        
+        x=[]
+        y=[]
+        for subgrid_model in self.subgrid_models:
+            file_string=self.file_path+"all_"+subgrid_model+".nc"
+            all_data=self._build_data(file_string)
+            split_idx=np.arange(0,len(all_data),2)
+            x.append(all_data[split_idx])
+            y.append(all_data[split_idx+1,0:2,:,:])
+            
+        ## Make sure all elements in list are same length
+        subs = iter(x)
+        self.maps_per_model = len(next(subs))
+        assert all(len(sub) == self.maps_per_model for sub in subs)
+        
+        self.x_data=torch.vstack(x)
+        self.y_data=torch.vstack(y)
+        
+        self.len=len(self.x_data)
+        
+        assert len(self.x_data)==len(self.y_data), "Number of x and y samples should be the same"
+        
+        self.train_ratio=train_ratio
+        self.valid_ratio=valid_ratio
+        self.test_ratio=test_ratio
+        self.rng = np.random.default_rng(seed)
+        
+        self._get_split_indices()
+        
+        ## Get means, stds for preprocessing
+        self.q_mean_upper,self.q_mean_lower,self.s_mean_upper,self.s_mean_lower=self.x_data.mean(dim=[0,2,3])
+        self.q_std_upper,self.q_std_lower,self.s_std_upper,self.s_std_lower=self.x_data.std(dim=[0,2,3])
+        
+    def _build_data(self,file_path):
         data_full=xr.open_dataset(file_path)
         if self.drop_spin_up:
             data_full=data_full.sel(time=slice(100800000.0,5.096036e+08))
@@ -283,28 +321,59 @@ class EmulatorForcingDataset(BaseDataset):
             return torch.cat([collapse_and_reshape(xarray) for xarray in xarray_subdata], channel_index)
 
         all_data=concat_arrays([data_full.q,data_full.q_subgrid_forcing])
-        split_idx=np.arange(0,len(all_data),2)
-        self.x_data=all_data[split_idx]
-        self.y_data=all_data[split_idx+1,0:2,:,:]
-        
-        ## Subsample datasets if required
         if self.subsample:
-            self._subsample()
-        
-        self.train_ratio=train_ratio
-        self.valid_ratio=valid_ratio
-        self.test_ratio=test_ratio
-        self.rng = np.random.default_rng(seed)
+            all_data=all_data[:int(self.subsample*2)]
+        return all_data
+    
+    def _get_split_indices(self):
+        """ Override the inherited method with a few additional features:
+            1. Ensure we have balanced samples of each subgrid forcing model
+            2. Save random indices for each model, so that we can test on them independently """
 
-        self.len=len(self.x_data)
+        ## Numerb of train, valid, test indices per data subset
+        num_train=math.floor(self.maps_per_model*self.train_ratio)
+        num_valid=math.floor(self.maps_per_model*self.valid_ratio)
+        num_test=math.floor(self.maps_per_model*self.test_ratio)
         
-        assert len(self.x_data)==len(self.y_data), "Number of x and y samples should be the same"
+        ## Temp lists to store indices
+        all_train=[]
+        all_valid=[]
+        all_test=[]
+
+        self.model_splits={}
+
+        for aa, elem in enumerate(self.subgrid_models):
+            self.model_splits[elem]={}
+
+            ## Generate list of indices for each subgrid model
+            rand_indices=self.rng.permutation(np.arange(aa*self.maps_per_model,(aa+1)*self.maps_per_model))
+
+            ## Incorporate subset into full set
+            all_train.append(rand_indices[0:num_train])
+            all_valid.append(rand_indices[num_train+1:num_train+num_valid])
+            all_test.append(rand_indices[num_train+num_valid+1:])
+
+            ## Also store subset separately for testing
+            self.model_splits[elem]["train"]=rand_indices[0:num_train]
+            self.model_splits[elem]["valid"]=rand_indices[num_train+1:num_train+num_valid]
+            self.model_splits[elem]["test"]=rand_indices[num_train+num_valid+1:]
+            
+        ## Flatten lists into train, valid, and test splits
+        self.train_idx=np.array(all_train).flatten()
+        self.valid_idx=np.array(all_valid).flatten()
+        self.test_idx=np.array(all_test).flatten()
         
-        self._get_split_indices()
+        ## Make sure we aren't overcounting
+        assert (len(self.train_idx)+len(self.valid_idx)+len(self.test_idx)) <= self.len
         
-        ## Get means, stds for preprocessing
-        self.q_mean_upper,self.q_mean_lower,self.s_mean_upper,self.s_mean_lower=self.x_data.mean(dim=[0,2,3])
-        self.q_std_upper,self.q_std_lower,self.s_std_upper,self.s_std_lower=self.x_data.std(dim=[0,2,3])
+        ## Make sure there's no overlap between train, valid and test data
+        assert len(set(self.train_idx) & set(self.valid_idx) & set(self.test_idx))==0, (
+                "Common elements in train, valid or test set")
+        return
+        
+    def _subsample(self):
+        """ Override default subsampling due to more complex dataset """
+        raise NotImplementedError
         
     def __len__(self):
         return self.len
