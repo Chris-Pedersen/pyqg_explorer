@@ -46,7 +46,7 @@ class BaseRegSytem(LightningModule):
         optimizer=torch.optim.AdamW(self.parameters(),lr=self.config["lr"],weight_decay=self.config["wd"])
         if self.config["scheduler"]:
             scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=10)
-            return {"optimizer": optimizer, "lr_scheduler": scheduler,"monitor": "train_loss"}
+            return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "train_loss"}
         else:
             return {"optimizer": optimizer}
         
