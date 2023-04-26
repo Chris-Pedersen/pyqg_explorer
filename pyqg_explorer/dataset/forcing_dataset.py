@@ -257,7 +257,7 @@ class EmulatorForcingDataset(BaseDataset):
     """
     x_data is q_i, y_data is q_{i+dt}
     """
-    def __init__(self,file_path,subgrid_models=["CNN","ZB","BScat"],seed=42,subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,file_path,subgrid_models=["CNN","ZB","BScat"],channels=4,seed=42,subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
         file_path:       path to data
         subgrid_models:  List containing subgrid models: can have any of: ["CNN", "ZB", "BScat"]
@@ -276,6 +276,7 @@ class EmulatorForcingDataset(BaseDataset):
         self.subgrid_models=subgrid_models
         self.file_path=file_path
         self.subsample=subsample
+        self.channels=channels
         
         x=[]
         y=[]
@@ -306,8 +307,12 @@ class EmulatorForcingDataset(BaseDataset):
         self._get_split_indices()
         
         ## Get means, stds for preprocessing
-        self.q_mean_upper,self.q_mean_lower,self.s_mean_upper,self.s_mean_lower=self.x_data.mean(dim=[0,2,3])
-        self.q_std_upper,self.q_std_lower,self.s_std_upper,self.s_std_lower=self.x_data.std(dim=[0,2,3])
+        if self.channels==4:
+            self.q_mean_upper,self.q_mean_lower,self.s_mean_upper,self.s_mean_lower=self.x_data.mean(dim=[0,2,3])
+            self.q_std_upper,self.q_std_lower,self.s_std_upper,self.s_std_lower=self.x_data.std(dim=[0,2,3])
+        elif self.channels==2:
+            self.q_mean_upper,self.q_mean_lower=self.x_data.mean(dim=[0,2,3])
+            self.q_std_upper,self.q_std_lower=self.x_data.std(dim=[0,2,3])
         
     def _build_data(self,file_path):
         data_full=xr.open_dataset(file_path)
@@ -320,7 +325,12 @@ class EmulatorForcingDataset(BaseDataset):
             channel_index=1
             return torch.cat([collapse_and_reshape(xarray) for xarray in xarray_subdata], channel_index)
 
-        all_data=concat_arrays([data_full.q,data_full.q_subgrid_forcing])
+        if self.channels==4:
+            all_data=concat_arrays([data_full.q,data_full.q_subgrid_forcing])
+        elif self.channels==2:
+            all_data=concat_arrays([data_full.q])
+        else:
+            print("Unknown number of channels requested")
         if self.subsample:
             all_data=all_data[:int(self.subsample*2)]
         return all_data
@@ -381,16 +391,26 @@ class EmulatorForcingDataset(BaseDataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        ## Return normalised arrays
-        q_upper=transforms.normalise_field(self.x_data[idx][0],self.q_mean_upper,self.q_std_upper)
-        q_lower=transforms.normalise_field(self.x_data[idx][1],self.q_mean_lower,self.q_std_lower)
-        s_upper=transforms.normalise_field(self.x_data[idx][2],self.s_mean_upper,self.s_std_upper)
-        s_lower=transforms.normalise_field(self.x_data[idx][3],self.s_mean_lower,self.s_std_lower)
-        q_t_upper=transforms.normalise_field(self.y_data[idx][0],self.q_mean_upper,self.q_std_upper)
-        q_t_lower=transforms.normalise_field(self.y_data[idx][1],self.q_mean_lower,self.q_std_lower)
-        x_out=torch.stack((q_upper,q_lower,s_upper,s_lower),dim=0)
-        y_out=torch.stack((q_t_upper,q_t_lower),dim=0)
-        return (x_out,y_out)
+        if self.channels==4:
+            ## Return normalised arrays
+            q_upper=transforms.normalise_field(self.x_data[idx][0],self.q_mean_upper,self.q_std_upper)
+            q_lower=transforms.normalise_field(self.x_data[idx][1],self.q_mean_lower,self.q_std_lower)
+            s_upper=transforms.normalise_field(self.x_data[idx][2],self.s_mean_upper,self.s_std_upper)
+            s_lower=transforms.normalise_field(self.x_data[idx][3],self.s_mean_lower,self.s_std_lower)
+            q_t_upper=transforms.normalise_field(self.y_data[idx][0],self.q_mean_upper,self.q_std_upper)
+            q_t_lower=transforms.normalise_field(self.y_data[idx][1],self.q_mean_lower,self.q_std_lower)
+            x_out=torch.stack((q_upper,q_lower,s_upper,s_lower),dim=0)
+            y_out=torch.stack((q_t_upper,q_t_lower),dim=0)
+            return (x_out,y_out)
+        elif self.channels==2:
+            ## Return normalised arrays
+            q_upper=transforms.normalise_field(self.x_data[idx][0],self.q_mean_upper,self.q_std_upper)
+            q_lower=transforms.normalise_field(self.x_data[idx][1],self.q_mean_lower,self.q_std_lower)
+            q_t_upper=transforms.normalise_field(self.y_data[idx][0],self.q_mean_upper,self.q_std_upper)
+            q_t_lower=transforms.normalise_field(self.y_data[idx][1],self.q_mean_lower,self.q_std_lower)
+            x_out=torch.stack((q_upper,q_lower),dim=0)
+            y_out=torch.stack((q_t_upper,q_t_lower),dim=0)
+            return (x_out,y_out)
 
 
 class TimestepDataset(BaseDataset):
