@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 
 
 class BaseDataset(Dataset):
+    """ Base object to store core dataset methods """
     def __init__(self,seed=42,subsample=None,drop_spin_up=True,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         super().__init__()
         self.train_ratio=train_ratio
@@ -54,13 +55,11 @@ class ResidualDataset(BaseDataset):
         """
         file_path:     path to data
         seed:          random seed used to create train/valid/test splits
-        normalise:     "proper" to normalise fields to zero mean and unit variance
         subsample:     None or int: if int, subsample the dataset to a total of N=subsample maps
         drop_spin_up:  Drop all snapshots taken during the spin-up phase
         train_ratio:   proportion of dataset to use as training data
         valid_ratio:   proportion of dataset to use as validation data
         test_ratio:    proportion of dataset to use as test data
-        
         """
         super().__init__()
         
@@ -120,12 +119,12 @@ class OfflineDataset(BaseDataset):
     """
     Dataset to prepare q, f and s fields for some given time horizon
     """
-    def __init__(self,file_path,seed=42,subsample=None,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,file_path,seed=42,subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
         file_path:   path to data
         seed:        random seed used to create train/valid/test splits
-        normalise:   bool, normalise mean and variance of fields
         subsample:   None or int: if int, subsample the dataset to a total of N=subsample maps
+        drop_spin_up:  Drop all snapshots taken during the spin-up phase
         train_ratio: proportion of dataset to use as training data
         valid_ratio: proportion of dataset to use as validation data
         test_ratio:  proportion of dataset to use as test data
@@ -134,6 +133,11 @@ class OfflineDataset(BaseDataset):
         super().__init__()
         
         data_full=xr.open_dataset(file_path)
+
+        self.drop_spin_up=drop_spin_up
+        data_full=xr.open_dataset(file_path)
+        if self.drop_spin_up:
+            data_full=data_full.sel(time=slice(100800000.0,5.096036e+08))
         
         def concat_arrays(xarray_subdata):
             def collapse_and_reshape(xarray):
@@ -192,7 +196,6 @@ class EmulatorDataset(BaseDataset):
         """
         file_path:     path to data
         seed:          random seed used to create train/valid/test splits
-        normalise:     "proper" to normalise fields to zero mean and unit variance
         subsample:     None or int: if int, subsample the dataset to a total of N=subsample maps
         drop_spin_up:  Drop all snapshots taken during the spin-up phase
         train_ratio:   proportion of dataset to use as training data
@@ -261,8 +264,8 @@ class EmulatorForcingDataset(BaseDataset):
         """
         file_path:       path to data
         subgrid_models:  List containing subgrid models: can have any of: ["CNN", "ZB", "BScat"]
+        channels:        2 or 4 - 2 channels will return only the q field, 4 channels will also return the subgrid forcing
         seed:            random seed used to create train/valid/test splits
-        normalise:       "proper" to normalise fields to zero mean and unit variance
         subsample:       None or int: if int, subsample the dataset to a total of N=subsample maps
         drop_spin_up:    Drop all snapshots taken during the spin-up phase
         train_ratio:     proportion of dataset to use as training data
