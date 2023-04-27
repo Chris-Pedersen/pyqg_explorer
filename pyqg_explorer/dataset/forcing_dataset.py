@@ -263,7 +263,9 @@ class EmulatorForcingDataset(BaseDataset):
     def __init__(self,file_path,subgrid_models=["CNN","ZB","BScat"],channels=4,seed=42,subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
         file_path:       path to data
-        subgrid_models:  List containing subgrid models: can have any of: ["CNN", "ZB", "BScat"]
+        subgrid_models:  List containing subgrid models: can have any of: ["CNN", "ZB", "BScat", "HRC"]
+                         "HRC" stands for a high-res, coarsened system, with the diagnosed forcing that we would use to train
+                         an offline model. All other systems are run in low res, with some subgrid model
         channels:        2 or 4 - 2 channels will return only the q field, 4 channels will also return the subgrid forcing
         seed:            random seed used to create train/valid/test splits
         subsample:       None or int: if int, subsample the dataset to a total of N=subsample maps
@@ -280,7 +282,7 @@ class EmulatorForcingDataset(BaseDataset):
         self.file_path=file_path
         self.subsample=subsample
         self.channels=channels
-        
+
         x=[]
         y=[]
         for subgrid_model in self.subgrid_models:
