@@ -285,7 +285,7 @@ class EmulatorForcingDataset(BaseDataset):
         y=[]
         for subgrid_model in self.subgrid_models:
             file_string=self.file_path+"all_"+subgrid_model+".nc"
-            all_data=self._build_data(file_string)
+            all_data=self._build_data(file_string,subgrid_model)
             split_idx=np.arange(0,len(all_data),2)
             x.append(all_data[split_idx])
             y.append(all_data[split_idx+1,0:2,:,:])
@@ -317,7 +317,9 @@ class EmulatorForcingDataset(BaseDataset):
             self.q_mean_upper,self.q_mean_lower=self.x_data.mean(dim=[0,2,3])
             self.q_std_upper,self.q_std_lower=self.x_data.std(dim=[0,2,3])
         
-    def _build_data(self,file_path):
+    def _build_data(self,file_path,subgrid_model):
+        """ For a given xarray file, slice, reshape and place the data in a torch tensor. If a subgrid
+            forcing field is required, store this too """
         data_full=xr.open_dataset(file_path)
         if self.drop_spin_up:
             data_full=data_full.sel(time=slice(100800000.0,5.096036e+08))
@@ -328,7 +330,9 @@ class EmulatorForcingDataset(BaseDataset):
             channel_index=1
             return torch.cat([collapse_and_reshape(xarray) for xarray in xarray_subdata], channel_index)
 
-        if self.channels==4:
+        if self.channels==4 and subgrid_model=="HRC":
+            all_data=concat_arrays([data_full.q,data_full.q_forcing_advection])
+        elif self.channels==4:
             all_data=concat_arrays([data_full.q,data_full.q_subgrid_forcing])
         elif self.channels==2:
             all_data=concat_arrays([data_full.q])
