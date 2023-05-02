@@ -7,7 +7,7 @@ import xarray as xr
 import pyqg_explorer.util.powerspec as powerspec
 import pyqg_explorer.parameterizations.parameterizations as parameterizations
 import pyqg_explorer.generate_datasets as generate_datasets
-
+import cmocean
 
 
 class EmulatorPerformance():
@@ -99,7 +99,84 @@ class ParameterizationPerformance():
         axs[1].hist(self.y_pred[:,1,:,:].flatten(),bins=200,density=True,alpha=0.5);
         axs[0].legend()
         return fig
+
+    def get_distribution_2d(self):
+        """ Plot histograms of the true and predicted subgrid forcing """
+        fig, axs = plt.subplots(1, 2,figsize=(11,4))
+        axs[0].set_title(r"Upper layer: $R^2$=%.2f" % self.r2_upper)
+        axs[1].set_title(r"Lower layer: $R^2$=%.2f" % self.r2_lower)
+        line=np.linspace(-4,4,100)
+        axs[0].plot(line,line,linestyle="dashed",color="gray",alpha=0.5)
+        ax=axs[0].hist2d(self.x_np[:,2,:,:].flatten(),self.y_pred[:,0,:,:].flatten(),bins=100,range=[[-4,4],[-4,4]],cmap='RdPu');
+        fig.colorbar(ax[3], ax=axs[0])
+        axs[1].plot(line,line,linestyle="dashed",color="gray",alpha=0.5)
+        ax=axs[1].hist2d(self.x_np[:,3,:,:].flatten(),self.y_pred[:,1,:,:].flatten(),bins=100,range=[[-4,4],[-4,4]],cmap='RdPu');
+        fig.colorbar(ax[3], ax=axs[1])
+        return fig
         
+    def get_fields(self,map_index=None):
+        
+        ## Chose random index unless one is provided
+        if map_index is None:
+            map_index=np.random.randint(len(self.x_np)-1)
+    
+        fig, axs = plt.subplots(2, 4,figsize=(15,6))
+        image=self.x_np[map_index][0]
+        limit=np.max(np.abs(image))
+        ax=axs[0][0].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit,interpolation='none')
+        fig.colorbar(ax, ax=axs[0][0])
+        axs[0][0].set_xticks([]); axs[0][0].set_yticks([])
+        axs[0][0].set_title("PV field")
+
+        image=self.x_np[map_index][2]
+        limit=np.max(np.abs(image))
+        ax=axs[0][1].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
+        fig.colorbar(ax, ax=axs[0][1])
+        axs[0][1].set_xticks([]); axs[0][1].set_yticks([])
+        axs[0][1].set_title("True forcing")
+
+        image=self.y_pred[map_index][0]
+        limit=np.max(np.abs(image))
+        ax=axs[0][2].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
+        fig.colorbar(ax, ax=axs[0][2])
+        axs[0][2].set_xticks([]); axs[0][2].set_yticks([])
+        axs[0][2].set_title("Forcing from CNN")
+
+        image=self.x_np[map_index][2]-self.y_pred[map_index][0]
+        limit=np.max(np.abs(image))
+        ax=axs[0][3].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
+        fig.colorbar(ax, ax=axs[0][3])
+        axs[0][3].set_xticks([]); axs[0][3].set_yticks([])
+        axs[0][3].set_title("True forcing-CNN forcing")
+        fig.tight_layout()
+
+        image=self.x_np[map_index][1]
+        limit=np.max(np.abs(image))
+        ax=axs[1][0].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
+        fig.colorbar(ax, ax=axs[1][0])
+        axs[1][0].set_xticks([]); axs[1][0].set_yticks([])
+
+        image=self.x_np[map_index][3]
+        limit=np.max(np.abs(image))
+        ax=axs[1][1].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
+        fig.colorbar(ax, ax=axs[1][1])
+        axs[1][1].set_xticks([]); axs[1][1].set_yticks([])
+
+        image=self.y_pred[map_index][1]
+        limit=np.max(np.abs(image))
+        ax=axs[1][2].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
+        fig.colorbar(ax, ax=axs[1][2])
+        axs[1][2].set_xticks([]); axs[1][2].set_yticks([])
+
+        image=self.x_np[map_index][3]-self.y_pred[map_index][1]
+        limit=np.max(np.abs(image))
+        ax=axs[1][3].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
+        fig.colorbar(ax, ax=axs[1][3])
+        axs[1][3].set_xticks([]); axs[1][3].set_yticks([])
+        fig.tight_layout()
+        
+        return fig
+
     ## Online tests
     def online_comparison(self):
         def KE(ds_test):
@@ -135,6 +212,7 @@ class ParameterizationPerformance():
         axs[1].set_xscale("log")
         axs[1].set_xlim(4e-6,2e-4)
 
+        ## Hardcoded for now - eventually want to have this read from the simulation attrs
         x_years=np.linspace(0,10,87)
 
         axs[2].set_title("KE over time (years)")
@@ -143,3 +221,4 @@ class ParameterizationPerformance():
         axs[2].plot(x_years,get_ke_time(theta_only),label="theta only CNN (64)",linestyle="dashed")
         axs[2].plot(x_years,get_ke_time(ds),label="This tested model!",linestyle="-.",lw=2)
         return fig
+
