@@ -1,10 +1,13 @@
 import torch
+import numpy as np
 import matplotlib.pyplot as plt
-import pyqg_explorer.util.powerspec as powerspec
 from sklearn.metrics import r2_score
+import xarray as xr
+
+import pyqg_explorer.util.powerspec as powerspec
 import pyqg_explorer.parameterizations.parameterizations as parameterizations
 import pyqg_explorer.generate_datasets as generate_datasets
-import xarray as xr
+
 
 
 class EmulatorPerformance():
@@ -90,10 +93,10 @@ class ParameterizationPerformance():
         fig, axs = plt.subplots(1, 2,figsize=(11,4))
         axs[0].set_title(r"Upper layer: $R^2$=%.2f" % self.r2_upper)
         axs[1].set_title(r"Lower layer: $R^2$=%.2f" % self.r2_lower)
-        axs[0].hist(perf.x_np[:,2,:,:].flatten(),bins=200,alpha=0.5,label="True");
-        axs[0].hist(perf.y_pred[:,0,:,:].flatten(),bins=200,alpha=0.5,label="Predicted");
-        axs[1].hist(perf.x_np[:,3,:,:].flatten(),bins=200,alpha=0.5);
-        axs[1].hist(perf.y_pred[:,1,:,:].flatten(),bins=200,alpha=0.5);
+        axs[0].hist(self.x_np[:,2,:,:].flatten(),bins=200,density=True,alpha=0.5,label="True");
+        axs[0].hist(self.y_pred[:,0,:,:].flatten(),bins=200,density=True,alpha=0.5,label="Predicted");
+        axs[1].hist(self.x_np[:,3,:,:].flatten(),bins=200,density=True,alpha=0.5);
+        axs[1].hist(self.y_pred[:,1,:,:].flatten(),bins=200,density=True,alpha=0.5);
         axs[0].legend()
         return fig
         
@@ -140,75 +143,3 @@ class ParameterizationPerformance():
         axs[2].plot(x_years,get_ke_time(theta_only),label="theta only CNN (64)",linestyle="dashed")
         axs[2].plot(x_years,get_ke_time(ds),label="This tested model!",linestyle="-.",lw=2)
         return fig
-
-
-
-def get_distribution(dataset,model,subgrid_model):
-    valid_loader = DataLoader(
-        emulator_dataset,
-        num_workers=10,
-        batch_size=64,
-        sampler=SubsetRandomSampler(dataset.model_splits[subgrid_model]["valid"]),
-    )
-    y_hat=[]
-    y_true=[]
-    for data in valid_loader:
-        x_data=data[0]
-        y_data=data[1]
-        y_pred=model(x_data)
-        y_hat.append(y_pred)
-        y_true.append(y_data-x_data[:,0:2,:,:])
-    hat=torch.vstack(y_hat).detach().numpy().flatten()
-    truth=torch.vstack(y_true).detach().numpy().flatten()
-    r2=r2_score(truth,hat)
-    
-    fig=plt.figure()
-    plt.title(r"%s, $R^2$=%.3f" % (subgrid_model,r2))
-    plt.hist(truth,bins=100,alpha=0.5,label="truth");
-    plt.hist(hat,bins=100,alpha=0.5,label="predicted");
-    plt.legend()
-    figure_dist=wandb.Image(fig)
-    wandb.log({"Distribution %s" % subgrid_model: figure_dist})
-    
-    fig, axs = plt.subplots(2, 4,figsize=(15,6))
-    ax=axs[0][0].imshow(x_data[0,0], cmap='bwr')
-    fig.colorbar(ax, ax=axs[0][0])
-    axs[0][0].set_xticks([]); axs[0][0].set_yticks([])
-    axs[0][0].set_title("i")
-
-    ax=axs[0][1].imshow(y_data[0,0]-x_data[0,0], cmap='bwr', interpolation='none')
-    fig.colorbar(ax, ax=axs[0][1])
-    axs[0][1].set_xticks([]); axs[0][1].set_yticks([])
-    axs[0][1].set_title("i+dt - i")
-
-    ax=axs[0][2].imshow(y_pred[0,0].detach().numpy(), cmap='bwr', interpolation='none')
-    fig.colorbar(ax, ax=axs[0][2])
-    axs[0][2].set_xticks([]); axs[0][2].set_yticks([])
-    axs[0][2].set_title("predicted i+dt -i")
-
-    ax=axs[0][3].imshow(y_pred[0,0].detach().numpy()-y_data[0,0].detach().numpy()-x_data[0,0].detach().numpy(), cmap='bwr', interpolation='none')
-    fig.colorbar(ax, ax=axs[0][3])
-    axs[0][3].set_xticks([]); axs[0][3].set_yticks([])
-    axs[0][3].set_title("True - predicted")
-    fig.tight_layout()
-
-    ax=axs[1][0].imshow(x_data[0,1], cmap='bwr')
-    fig.colorbar(ax, ax=axs[1][0])
-    axs[1][0].set_xticks([]); axs[1][0].set_yticks([])
-
-    ax=axs[1][1].imshow(y_data[0,1]-x_data[0,1], cmap='bwr', interpolation='none')
-    fig.colorbar(ax, ax=axs[1][1])
-    axs[1][1].set_xticks([]); axs[1][1].set_yticks([])
-
-    ax=axs[1][2].imshow(y_pred[0,1].detach().numpy(), cmap='bwr', interpolation='none')
-    fig.colorbar(ax, ax=axs[1][2])
-    axs[1][2].set_xticks([]); axs[1][2].set_yticks([])
-
-    ax=axs[1][3].imshow(y_pred[0,1].detach().numpy()-y_data[0,1].detach().numpy()-x_data[0,1].detach().numpy(), cmap='bwr', interpolation='none')
-    fig.colorbar(ax, ax=axs[1][3])
-    axs[1][3].set_xticks([]); axs[1][3].set_yticks([])
-    fig.tight_layout()
-
-    figure_fields=wandb.Image(fig)
-    wandb.log({"Random fields %s" % subgrid_model: figure_fields})
-    return
