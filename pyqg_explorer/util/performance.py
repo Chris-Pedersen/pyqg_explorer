@@ -111,7 +111,7 @@ class ParameterizationPerformance():
             for snaps in ke:
                 ke_array.append(ds_test.attrs['pyqg:L']*np.sum(snaps.data)/(ds_test.attrs['pyqg:nx'])**2)
             return ke_array
-        parameterization=parameterizations.Parameterization(model)
+        parameterization=parameterizations.Parameterization(self.network)
         ds = generate_datasets.generate_dataset(parameterization=parameterization)
         low_res=xr.open_dataset('/scratch/cp3759/pyqg_data/sims/online_test_reference_sims/test_sim_641.nc')
         high_res=xr.open_dataset('/scratch/cp3759/pyqg_data/sims/online_test_reference_sims/test_sim_2561.nc')
