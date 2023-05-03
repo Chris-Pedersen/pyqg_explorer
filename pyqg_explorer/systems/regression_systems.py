@@ -123,8 +123,8 @@ class JointRegressionSystem(BaseRegSytem):
         """ If we also have a beta network, run joint optimisation """
         x_data, y_data = batch
         output_theta = self(x_data[:,0:2,:,:]) ## Takes in Q, outputs \hat{S}
-        output_beta = self.network_beta(torch.cat((x_data[:,0:4,:,:],output_theta),1))
-        loss_theta = self.criterion(output_theta, x_data[:,4:6,:,:])
+        output_beta = self.network_beta(torch.cat((x_data[:,0:2,:,:],output_theta),1))
+        loss_theta = self.config["theta_loss"]*self.criterion(output_theta, x_data[:,2:4,:,:])
         loss_beta = self.config["beta_loss"]*self.criterion(output_beta, y_data)
         loss = loss_theta+loss_beta
         self.log(f"{kind}_theta_loss", loss_theta, on_step=False, on_epoch=True)
