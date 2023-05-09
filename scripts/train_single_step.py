@@ -12,6 +12,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import LearningRateMonitor
 import wandb
 
 import pyqg_explorer.systems.regression_systems as reg_sys
@@ -24,11 +25,11 @@ model_string="/scratch/cp3759/pyqg_data/models/emulator/fcnn_residuals/fcnn_r_4_
 model_beta=misc.load_model(model_string)
 
 config=reg_sys.config
-config["epochs"]=5
+config["epochs"]=200
 config["time_horizon"]=10
 config["subgrid_models"]=["HRC"]
-config["beta_loss"]=100
-config["theta_loss"]=0
+config["beta_loss"]=0
+config["theta_loss"]=1
 config["emulator_model"]=model_string
 
 dataset=forcing_dataset.EmulatorForcingDataset('/scratch/cp3759/pyqg_data/sims/%d_step_forcing/' % config["time_horizon"],config["subgrid_models"],
@@ -68,17 +69,19 @@ wandb.config["theta learnable parameters"]=sum(p.numel() for p in model.paramete
 wandb.watch(model, log_freq=1)
 
 logger = WandbLogger()
+lr_monitor=LearningRateMonitor(logging_interval='epoch')
 
 trainer = pl.Trainer(
     accelerator="auto",
     max_epochs=config["epochs"],
     logger=logger,
     enable_progress_bar=False,
+    callbacks=[lr_monitor]
     )
 
 trainer.fit(system, train_loader, valid_loader)
 
-perf=performance.ParameterizationPerformance(model,valid_loader,threshold=1000)
+perf=performance.ParameterizationPerformance(model,valid_loader,threshold=5000)
 
 dist_fig=perf.get_distribution_2d()
 figure_dist=wandb.Image(dist_fig)
