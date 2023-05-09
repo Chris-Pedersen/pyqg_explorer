@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
 import xarray as xr
 
+import matplotlib.animation as animation
+from IPython.display import HTML
+
 import pyqg_explorer.util.powerspec as powerspec
 import pyqg_explorer.parameterizations.parameterizations as parameterizations
 import pyqg_explorer.generate_datasets as generate_datasets
@@ -335,3 +338,91 @@ class ParameterizationPerformance():
         axs[2].plot(x_years,get_ke_time(ds),label="This tested model!",linestyle="-.",lw=2)
         return fig
 
+class EmulatorAnimation():
+    def __init__(self,q_ds,model,fps=10,nSeconds=30):
+        self.q_ds=q_ds
+        self.model=model
+        self.fps = fps
+        self.nSeconds = nSeconds
+        self.q_i_pred=q_ds[0].data
+        
+    def push_forward(self,q_i,model):
+        """ Update predicted q by one emulator pass """
+        ## Convert q to standardised q
+        x=torch.tensor(q_i).float()
+        ## Map from physical to normalised space using the factors used to train the network
+        ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
+        x_upper = transforms.normalise_field(x[0],model.config["q_mean_upper"],model.config["q_std_upper"])
+        x_lower = transforms.normalise_field(x[1],model.config["q_mean_lower"],model.config["q_std_lower"])
+        x = torch.stack((x_upper,x_lower),dim=0).unsqueeze(0)
+
+        x=model(x)
+
+        ## Map back from normalised space to physical units
+        q_upper=transforms.denormalise_field(x[:,0,:,:],model.config["q_mean_upper"],model.config["q_std_upper"])
+        q_lower=transforms.denormalise_field(x[:,1,:,:],model.config["q_mean_lower"],model.config["q_std_lower"])
+
+        ## Reshape to match pyqg dimensions, and cast to numpy array
+        q_i_dt=torch.cat((q_upper,q_lower)).detach().numpy().astype(np.double)
+
+        return q_i_dt+q_i
+    
+
+    def animate(self):
+        fig, axs = plt.subplots(2, 3,figsize=(12,6))
+        self.ax1=axs[0][0].imshow(self.q_ds[0].data[0], cmap=cmocean.cm.balance)
+        fig.colorbar(self.ax1, ax=axs[0][0])
+        axs[0][0].set_xticks([]); axs[0][0].set_yticks([])
+        axs[0][0].set_title("true i+dt")
+
+        self.ax2=axs[0][1].imshow(self.q_ds[0].data[0], cmap=cmocean.cm.balance, interpolation='none')
+        fig.colorbar(self.ax2, ax=axs[0][1])
+        axs[0][1].set_xticks([]); axs[0][1].set_yticks([])
+        axs[0][1].set_title("pred i+dt")
+
+        self.ax3=axs[0][2].imshow(self.q_ds[0].data[0], cmap=cmocean.cm.balance, interpolation='none')
+        fig.colorbar(self.ax3, ax=axs[0][2])
+        axs[0][2].set_xticks([]); axs[0][2].set_yticks([])
+        axs[0][2].set_title("diff")
+
+        fig.tight_layout()
+
+        self.ax4=axs[1][0].imshow(self.q_ds[0].data[1], cmap=cmocean.cm.balance)
+        fig.colorbar(ax4, ax=axs[1][0])
+        axs[1][0].set_xticks([]); axs[1][0].set_yticks([])
+
+        self.ax5=axs[1][1].imshow(self.q_ds[0].data[1], cmap=cmocean.cm.balance, interpolation='none')
+        fig.colorbar(self.ax5, ax=axs[1][1])
+        axs[1][1].set_xticks([]); axs[1][1].set_yticks([])
+
+        self.ax6=axs[1][2].imshow(self.q_ds[0].data[1], cmap=cmocean.cm.balance, interpolation='none')
+        cb6=fig.colorbar(self.ax6, ax=axs[1][2])
+        axs[1][2].set_xticks([]); axs[1][2].set_yticks([])
+        fig.tight_layout()
+        
+        anim = animation.FuncAnimation(
+                                       fig, 
+                                       self.animate_func, 
+                                       frames = self.nSeconds * self.fps,
+                                       interval = 250 / self.fps, # in ms
+                                       )
+        plt.close()
+        return HTML(anim.to_html5_video())
+        
+        
+    def animate_func(self,i):
+        if i % fps == 0:
+            print( '.', end ='' )
+
+        self.ax1.set_array(self.q_ds[i].data[0])
+        self.ax1.set_clim(-np.max(np.abs(self.q_ds[i].data[0])), np.max(np.abs(self.q_ds[i].data[0])))
+        self.ax2.set_array(self.q_ds[i].data[0])
+        self.ax2.set_clim(-np.max(np.abs(self.q_ds[i].data[0])), np.max(np.abs(self.q_ds[i].data[0])))
+        self.ax3.set_array(self.q_ds[i].data[0])
+        self.ax3.set_clim(-np.max(np.abs(self.q_ds[i].data[0])), np.max(np.abs(self.q_ds[i].data[0])))
+        self.ax4.set_array(self.q_ds[i].data[1])
+        self.ax4.set_clim(-np.max(np.abs(self.q_ds[i].data[1])), np.max(np.abs(self.q_ds[i].data[1])))
+        self.ax5.set_array(self.q_ds[i].data[1])
+        self.ax5.set_clim(-np.max(np.abs(self.q_ds[i].data[1])), np.max(np.abs(self.q_ds[i].data[1])))
+        self.ax6.set_array(self.q_ds[i].data[1])
+        self.ax6.set_clim(-np.max(np.abs(self.q_ds[i].data[1])), np.max(np.abs(self.q_ds[i].data[1])))
