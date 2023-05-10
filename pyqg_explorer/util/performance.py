@@ -421,7 +421,7 @@ class EmulatorAnimation():
         return HTML(anim.to_html5_video())
         
     def animate_func(self,i):
-        if i % fps == 0:
+        if i % self.fps == 0:
             print( '.', end ='' )
             
         self.time_text.set_text("%d timesteps" % (i*10))
