@@ -339,17 +339,19 @@ class ParameterizationPerformance():
         return fig
 
 class EmulatorAnimation():
-    def __init__(self,q_ds,model,fps=10,nSeconds=30):
+    def __init__(self,q_ds,model,fps=10,nSeconds=20,normalise=True):
         self.q_ds=q_ds
         self.model=model
         self.fps = fps
         self.nSeconds = nSeconds
         self.q_i_pred=q_ds[0].data
+        self.normalise=normalise
         
-    def push_forward(self,q_i,model):
+    def _push_forward(self):
         """ Update predicted q by one emulator pass """
+        
         ## Convert q to standardised q
-        x=torch.tensor(q_i).float()
+        x=torch.tensor(self.q_i_pred).float()
         ## Map from physical to normalised space using the factors used to train the network
         ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
         x_upper = transforms.normalise_field(x[0],model.config["q_mean_upper"],model.config["q_std_upper"])
@@ -361,13 +363,18 @@ class EmulatorAnimation():
         ## Map back from normalised space to physical units
         q_upper=transforms.denormalise_field(x[:,0,:,:],model.config["q_mean_upper"],model.config["q_std_upper"])
         q_lower=transforms.denormalise_field(x[:,1,:,:],model.config["q_mean_lower"],model.config["q_std_lower"])
+        
+        if self.normalise==True:
+            q_upper=q_upper-torch.mean(q_upper)
+            q_lower=q_lower-torch.mean(q_lower)
 
         ## Reshape to match pyqg dimensions, and cast to numpy array
         q_i_dt=torch.cat((q_upper,q_lower)).detach().numpy().astype(np.double)
-
-        return q_i_dt+q_i
+                    
+        self.q_i_pred=self.q_i_pred+q_i_dt
+        
+        return
     
-
     def animate(self):
         fig, axs = plt.subplots(2, 3,figsize=(12,6))
         self.ax1=axs[0][0].imshow(self.q_ds[0].data[0], cmap=cmocean.cm.balance)
@@ -388,7 +395,7 @@ class EmulatorAnimation():
         fig.tight_layout()
 
         self.ax4=axs[1][0].imshow(self.q_ds[0].data[1], cmap=cmocean.cm.balance)
-        fig.colorbar(ax4, ax=axs[1][0])
+        fig.colorbar(self.ax4, ax=axs[1][0])
         axs[1][0].set_xticks([]); axs[1][0].set_yticks([])
 
         self.ax5=axs[1][1].imshow(self.q_ds[0].data[1], cmap=cmocean.cm.balance, interpolation='none')
@@ -398,6 +405,9 @@ class EmulatorAnimation():
         self.ax6=axs[1][2].imshow(self.q_ds[0].data[1], cmap=cmocean.cm.balance, interpolation='none')
         cb6=fig.colorbar(self.ax6, ax=axs[1][2])
         axs[1][2].set_xticks([]); axs[1][2].set_yticks([])
+        
+        self.time_text=axs[0][2].text(-20,-20,"HELLO THERE")
+        
         fig.tight_layout()
         
         anim = animation.FuncAnimation(
@@ -407,22 +417,41 @@ class EmulatorAnimation():
                                        interval = 250 / self.fps, # in ms
                                        )
         plt.close()
-        return HTML(anim.to_html5_video())
         
+        return HTML(anim.to_html5_video())
         
     def animate_func(self,i):
         if i % fps == 0:
             print( '.', end ='' )
-
-        self.ax1.set_array(self.q_ds[i].data[0])
-        self.ax1.set_clim(-np.max(np.abs(self.q_ds[i].data[0])), np.max(np.abs(self.q_ds[i].data[0])))
-        self.ax2.set_array(self.q_ds[i].data[0])
-        self.ax2.set_clim(-np.max(np.abs(self.q_ds[i].data[0])), np.max(np.abs(self.q_ds[i].data[0])))
-        self.ax3.set_array(self.q_ds[i].data[0])
-        self.ax3.set_clim(-np.max(np.abs(self.q_ds[i].data[0])), np.max(np.abs(self.q_ds[i].data[0])))
-        self.ax4.set_array(self.q_ds[i].data[1])
-        self.ax4.set_clim(-np.max(np.abs(self.q_ds[i].data[1])), np.max(np.abs(self.q_ds[i].data[1])))
-        self.ax5.set_array(self.q_ds[i].data[1])
-        self.ax5.set_clim(-np.max(np.abs(self.q_ds[i].data[1])), np.max(np.abs(self.q_ds[i].data[1])))
-        self.ax6.set_array(self.q_ds[i].data[1])
-        self.ax6.set_clim(-np.max(np.abs(self.q_ds[i].data[1])), np.max(np.abs(self.q_ds[i].data[1])))
+            
+        self.time_text.set_text("%d timesteps" % (i*10))
+    
+        ## Set image and colorbar for each panel
+        image=self.q_ds[i].data[0]
+        self.ax1.set_array(image)
+        self.ax1.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.q_i_pred[0]
+        self.ax2.set_array(image)
+        self.ax2.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.q_i_pred[0]-self.q_ds[i].data[0]
+        self.ax3.set_array(image)
+        self.ax3.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.q_ds[i].data[1]
+        self.ax4.set_array(image)
+        self.ax4.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.q_i_pred[1]
+        self.ax5.set_array(image)
+        self.ax5.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.q_i_pred[1]-self.q_ds[i].data[1]
+        self.ax6.set_array(image)
+        self.ax6.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        self._push_forward()
+        
+        return 
+        
