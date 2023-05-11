@@ -31,7 +31,7 @@ def train(time_horizon):
     config["q_mean_lower"]=emulator_dataset.q_mean_lower
     config["q_std_upper"]=emulator_dataset.q_std_upper
     config["q_std_lower"]=emulator_dataset.q_std_lower
-    config["training_fields"]=len(emulator_dataset.test_idx)
+    config["training_fields"]=len(emulator_dataset.train_idx)
     config["validation_fields"]=len(emulator_dataset.valid_idx)
     config["save_name"]="fcnnr_%d_%d_step_all_May.p" % (config["input_channels"],config["time_horizon"])
 
@@ -70,6 +70,7 @@ def train(time_horizon):
     trainer.fit(system, train_loader, valid_loader)
     model.save_model()
 
+    perf=performance.EmulatorPerformance(model,valid_loader,threshold=5000)
     fig_field=perf.get_fields()
     figure_fields=wandb.Image(fig_field)
     wandb.log({"Random fields": figure_fields})
@@ -80,7 +81,7 @@ def train(time_horizon):
 
     wandb.finish()
 
-time_horizons=[1,2,5,10,25,50]
+time_horizons=[5,10,25,50]
 
 for time_hor in time_horizons:
     train(time_hor)
