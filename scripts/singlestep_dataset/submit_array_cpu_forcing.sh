@@ -17,4 +17,4 @@ module purge
 singularity exec --nv \
 	    --overlay /scratch/cp3759/sing/overlay-50G-10M.ext3:ro \
 	    /scratch/work/public/singularity/cuda11.1-cudnn8-devel-ubuntu18.04.sif \
-	    /bin/bash -c "source /ext3/env.sh; python3 /home/cp3759/Projects/pyqg_explorer/scripts/gen_forcing.py --save_to /scratch/cp3759/pyqg_data/sims/100_step_forcing/100_step.nc --increment 100 --run_number $SLURM_ARRAY_TASK_ID --parameterization"
+	    /bin/bash -c "source /ext3/env.sh; python3 /home/cp3759/Projects/pyqg_explorer/scripts/gen_forcing.py --save_to /scratch/cp3759/pyqg_data/sims/2_step_forcing/2_step_CNN.nc --increment 2 --run_number $SLURM_ARRAY_TASK_ID --parameterization CNN"
