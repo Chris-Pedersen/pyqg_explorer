@@ -1,3 +1,3 @@
 ## Pyqg explorer
 
-My testing area for Pyqg things
+To install run `pip install -e .`
