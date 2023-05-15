@@ -148,8 +148,8 @@ class ParameterizationPerformance():
         
         self.network=network
         self.x_np=[]
-        self.y_true=[]
-        self.y_pred=[]
+        self.y_true=[] ## True subgrid forcing
+        self.y_pred=[] ## Predicted subgrid forcing
         
         count=0
         ## Cache x, true y and predicted y values that we will use to guage offline performance
@@ -157,9 +157,14 @@ class ParameterizationPerformance():
             x=data[0]
             y=data[1]
             count+=x.shape[0]
-            self.x_np.append(x)
-            self.y_true.append(y)
-            self.y_pred.append(self.network(x[:,0:2,:]))
+            if x.shape[1]>2:
+                self.x_np.append(x[:,0:2,:])   
+                self.y_true.append(x[:,2:4,:]) 
+                self.y_pred.append(self.network(x[:,0:2,:]))
+            else:
+                self.x_np.append(x)
+                self.y_true.append(y)
+                self.y_pred.append(self.network(x))
             if count>threshold:
                 break
         self.x_np=torch.vstack(self.x_np).detach().numpy()
@@ -167,8 +172,8 @@ class ParameterizationPerformance():
         self.y_pred=torch.vstack(self.y_pred).detach().numpy() ## Do we really need to save this?
         
         ## Save R2, since we basically get it for free at this point
-        self.r2_upper=r2_score(self.x_np[:,2,:,:].flatten(),self.y_pred[:,0,:,:].flatten())
-        self.r2_lower=r2_score(self.x_np[:,3,:,:].flatten(),self.y_pred[:,1,:,:].flatten())
+        self.r2_upper=r2_score(self.y_true[:,0,:,:].flatten(),self.y_pred[:,0,:,:].flatten())
+        self.r2_lower=r2_score(self.y_true[:,1,:,:].flatten(),self.y_pred[:,1,:,:].flatten())
     
     ## Offline tests
     def get_power_spectrum(self):
@@ -179,8 +184,8 @@ class ParameterizationPerformance():
         power_lower_pred=[]
 
         for aa in range(len(self.x_np)):
-            power_upper_true.append(powerspec.get_power_spectrum(self.x_np[aa][2]))
-            power_lower_true.append(powerspec.get_power_spectrum(self.x_np[aa][3]))
+            power_upper_true.append(powerspec.get_power_spectrum(self.y_true[aa][0]))
+            power_lower_true.append(powerspec.get_power_spectrum(self.y_true[aa][1]))
             power_upper_pred.append(powerspec.get_power_spectrum(self.y_pred[aa][0]))
             power_lower_pred.append(powerspec.get_power_spectrum(self.y_pred[aa][1]))
 
@@ -222,10 +227,10 @@ class ParameterizationPerformance():
         axs[1].set_title(r"Lower layer: $R^2$=%.2f" % self.r2_lower)
         line=np.linspace(-4,4,100)
         axs[0].plot(line,line,linestyle="dashed",color="gray",alpha=0.5)
-        ax=axs[0].hist2d(self.x_np[:,2,:,:].flatten(),self.y_pred[:,0,:,:].flatten(),bins=100,range=[[-4,4],[-4,4]],cmap='RdPu');
+        ax=axs[0].hist2d(self.y_true[:,0,:,:].flatten(),self.y_pred[:,0,:,:].flatten(),bins=100,range=[[-4,4],[-4,4]],cmap='RdPu');
         fig.colorbar(ax[3], ax=axs[0])
         axs[1].plot(line,line,linestyle="dashed",color="gray",alpha=0.5)
-        ax=axs[1].hist2d(self.x_np[:,3,:,:].flatten(),self.y_pred[:,1,:,:].flatten(),bins=100,range=[[-4,4],[-4,4]],cmap='RdPu');
+        ax=axs[1].hist2d(self.y_true[:,1,:,:].flatten(),self.y_pred[:,1,:,:].flatten(),bins=100,range=[[-4,4],[-4,4]],cmap='RdPu');
         fig.colorbar(ax[3], ax=axs[1])
         return fig
         
@@ -244,7 +249,7 @@ class ParameterizationPerformance():
         axs[0][0].set_xticks([]); axs[0][0].set_yticks([])
         axs[0][0].set_title("PV field")
 
-        image=self.x_np[map_index][2]
+        image=self.y_true[map_index][0]
         limit=np.max(np.abs(image))
         ax=axs[0][1].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
         fig.colorbar(ax, ax=axs[0][1])
@@ -258,7 +263,7 @@ class ParameterizationPerformance():
         axs[0][2].set_xticks([]); axs[0][2].set_yticks([])
         axs[0][2].set_title("Forcing from CNN")
 
-        image=self.x_np[map_index][2]-self.y_pred[map_index][0]
+        image=self.y_true[map_index][0]-self.y_pred[map_index][0]
         limit=np.max(np.abs(image))
         ax=axs[0][3].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
         fig.colorbar(ax, ax=axs[0][3])
@@ -272,7 +277,7 @@ class ParameterizationPerformance():
         fig.colorbar(ax, ax=axs[1][0])
         axs[1][0].set_xticks([]); axs[1][0].set_yticks([])
 
-        image=self.x_np[map_index][3]
+        image=self.y_true[map_index][1]
         limit=np.max(np.abs(image))
         ax=axs[1][1].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
         fig.colorbar(ax, ax=axs[1][1])
@@ -284,7 +289,7 @@ class ParameterizationPerformance():
         fig.colorbar(ax, ax=axs[1][2])
         axs[1][2].set_xticks([]); axs[1][2].set_yticks([])
 
-        image=self.x_np[map_index][3]-self.y_pred[map_index][1]
+        image=self.y_true[map_index][1]-self.y_pred[map_index][1]
         limit=np.max(np.abs(image))
         ax=axs[1][3].imshow(image, cmap=cmocean.cm.balance,vmin=-limit,vmax=limit, interpolation='none')
         fig.colorbar(ax, ax=axs[1][3])
