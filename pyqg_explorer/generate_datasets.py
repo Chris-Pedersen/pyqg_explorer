@@ -183,7 +183,13 @@ def run_simulation(m, sampling_freq=1000, sampling_dist='uniform'):
     snapshots = []
     while m.t < m.tmax:
         if m.tc % sampling_freq == 0:
-            snapshots.append(m.to_dataset().copy(deep=True))
+            ds=m.to_dataset().copy(deep=True)
+            KEspec=(m.wv2*np.abs(m.ph)**2/m.M**2)
+            KEs_upper = calc_ispec(m, KEspec[0])
+            KEs_lower = calc_ispec(m, KEspec[1])
+            KEs_both=np.vstack((KEs_upper[1],KEs_lower[1]))
+            ds['KE_ispec']=(["lev","ispec_k"],KEs_both)
+            snapshots.append(ds)
         m._step_forward()
     ## Concat snapshots into one dataset
     d_cat=concat_and_convert(snapshots)
