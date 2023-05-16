@@ -359,15 +359,15 @@ class EmulatorAnimation():
         x=torch.tensor(self.q_i_pred).float()
         ## Map from physical to normalised space using the factors used to train the network
         ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
-        x_upper = transforms.normalise_field(x[0],model.config["q_mean_upper"],model.config["q_std_upper"])
-        x_lower = transforms.normalise_field(x[1],model.config["q_mean_lower"],model.config["q_std_lower"])
+        x_upper = transforms.normalise_field(x[0],self.model.config["q_mean_upper"],self.model.config["q_std_upper"])
+        x_lower = transforms.normalise_field(x[1],self.model.config["q_mean_lower"],self.model.config["q_std_lower"])
         x = torch.stack((x_upper,x_lower),dim=0).unsqueeze(0)
 
-        x=model(x)
+        x=self.model(x)
 
         ## Map back from normalised space to physical units
-        q_upper=transforms.denormalise_field(x[:,0,:,:],model.config["q_mean_upper"],model.config["q_std_upper"])
-        q_lower=transforms.denormalise_field(x[:,1,:,:],model.config["q_mean_lower"],model.config["q_std_lower"])
+        q_upper=transforms.denormalise_field(x[:,0,:,:],self.model.config["q_mean_upper"],self.model.config["q_std_upper"])
+        q_lower=transforms.denormalise_field(x[:,1,:,:],self.model.config["q_mean_lower"],self.model.config["q_std_lower"])
         
         if self.normalise==True:
             q_upper=q_upper-torch.mean(q_upper)
