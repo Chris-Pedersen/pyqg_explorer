@@ -25,8 +25,7 @@ config={## Dastaset config
         "input_channels":2,
         "output_channels":2,
         "activation":"ReLU",
-        "save_name":None,
-        "save_path":None,
+        "save_name":"model_weights.pt",
         "conv_layers":5
         }
 
