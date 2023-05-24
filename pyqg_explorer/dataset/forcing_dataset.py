@@ -260,7 +260,7 @@ class EmulatorForcingDataset(BaseDataset):
     """
     x_data is q_i, y_data is q_{i+dt}
     """
-    def __init__(self,file_path,subgrid_models=["CNN","ZB","BScat"],channels=4,seed=42,subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+    def __init__(self,file_path,subgrid_models=["CNN","ZB","BScat","HRC"],channels=4,seed=42,subsample=None,drop_spin_up=False,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
         """
         file_path:       path to data
         subgrid_models:  List containing subgrid models: can have any of: ["CNN", "ZB", "BScat", "HRC"]
