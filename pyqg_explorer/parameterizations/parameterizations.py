@@ -6,13 +6,14 @@ import numpy as np
 class Parameterization(pyqg.QParameterization):
     """ pyqg subgrid parameterisation for the potential vorticity"""
     
-    def __init__(self,model,normalise=True,cache_forcing=False):
+    def __init__(self,model,normalise=True,cache_forcing=False,coeff=1):
         """ Initialise with a list of torch models, one for each layer """
         self.model=model
         self.model.eval() ## Ensure we are in eval
         self.normalise=normalise
         self.cache_forcing=cache_forcing
         self.cached_forcing=None
+        self.coeff=coeff
 
     def get_cached_forcing(self):
         return self.cached_forcing
@@ -31,6 +32,9 @@ class Parameterization(pyqg.QParameterization):
             means=np.mean(s,axis=(1,2))
             s[0]=s[0]-means[0]
             s[1]=s[1]-means[1]
+
+        ## Rescale by scaling coefficient
+        s=s*self.coeff
 
         if self.cache_forcing:
             self.cached_forcing=s
