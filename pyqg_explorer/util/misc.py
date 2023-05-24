@@ -88,7 +88,7 @@ def realspace_filter_and_coarsen(hires_var, m1, m2, filtr='gcm'):
         raise ValueError
 
 
-## Concatenate a list of datasets along time axis
+## Concatenate a list of datasets along time axis while running pyqg sims
 def concat_and_convert(datasets, drop_complex=1):
     # Concatenate datasets along the time dimension
     d = xr.concat(datasets, dim='time')
@@ -113,3 +113,21 @@ def concat_and_convert(datasets, drop_complex=1):
         d = d.drop_vars(complex_vars)
 
     return d
+
+#### Scripts to concat a suite of pyqg sims into one xarray file ####
+def get_string(horizon,param,aa):
+    return "/scratch/cp3759/pyqg_data/sims/%d_step_forcing/%d_step_%s%d.nc" % (horizon,horizon,param,aa)
+
+def concat_arrays(horizon,param):
+    data_list=[]
+    for aa in range(1,276):
+        filestring=get_string(horizon,param,aa)
+        print(filestring)
+        data_new=xr.open_dataset(filestring)
+        data_list.append(data_new)
+    data_all = xr.concat(data_list,dim="run")
+    save_string="/scratch/cp3759/pyqg_data/sims/%d_step_forcing/all_%s.nc" % (horizon,param)
+    data_all.to_netcdf(save_string)
+    print("Saved to %s" % save_string)
+    print("done")
+    
