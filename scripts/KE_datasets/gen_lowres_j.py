@@ -29,8 +29,9 @@ YEAR = 24*60*60*360.
 kwargs["nx"]=64
 kwargs["filterfac"]=23.6*args.alpha
 kwargs["tmax"]=tmax=20*YEAR
-model_cnn=misc.load_model("/scratch/cp3759/pyqg_data/models/joint_May/joint_beta100_time5.p")
-kwargs["parameterization"]=parameterizations.Parameterization(model_cnn)
+#model_cnn=misc.load_model("/scratch/cp3759/pyqg_data/wandb_runs/wandb/run-20230522_174856-5xfxo4i9/files/model_weights.pt")
+model_cnn=misc.load_model("/scratch/cp3759/pyqg_data/models/cnn_theta_ONLY_forcing1_both_epoch200.pt")
+kwargs["parameterization"]=parameterizations.Parameterization(model_cnn,coeff=0.5)
 
 for save_file in files:
     ## Add run number to save file name
