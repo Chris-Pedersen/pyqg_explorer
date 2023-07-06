@@ -16,6 +16,7 @@ while [[ "$#" -gt 0 ]]; do
         --save_to) save_to="$2"; shift ;;
         --model_string) model_string="$2" ;;
         --alpha) alpha="$2" ;;
+        --coeff) coeff="$2" ;;
     esac
     shift
 done
@@ -24,4 +25,4 @@ done
 singularity exec --nv \
 	    --overlay /scratch/cp3759/sing/overlay-50G-10M.ext3:ro \
 	    /scratch/work/public/singularity/cuda11.1-cudnn8-devel-ubuntu18.04.sif \
-	    /bin/bash -c "source /ext3/env.sh; python3 /home/cp3759/Projects/pyqg_explorer/scripts/KE_datasets/run_sim.py --save_to $save_to --model_string $model_string --alpha $alpha --run_number $SLURM_ARRAY_TASK_ID"
+	    /bin/bash -c "source /ext3/env.sh; python3 /home/cp3759/Projects/pyqg_explorer/scripts/KE_datasets/run_sim.py --save_to $save_to --model_string $model_string --alpha $alpha --run_number $SLURM_ARRAY_TASK_ID --coeff $coeff"
