@@ -3,7 +3,7 @@ import numpy as np
 import pyqg_explorer.simulations.util as util
 
 
-def run_forcing_simulations(m1, m2, increment, sampling_freq=1000, sampling_dist='uniform', downscaling='spectral', **kw):
+def run_forcing_simulations(m1, m2, increment, rollout=1, sampling_freq=1000, sampling_dist='uniform', downscaling='spectral', **kw):
     def downscaled(hires_var):
         if downscaling == 'spectral':
             return util.spectral_filter_and_coarsen(hires_var, m1, m2, **kw)
@@ -37,11 +37,6 @@ def run_forcing_simulations(m1, m2, increment, sampling_freq=1000, sampling_dist
     # simulation 
     snapshots = []
 
-    # If we're sampling irregularly, pick the time index for the next sample
-    # from an exponential distribution
-    if sampling_dist == 'exponential':
-        next_sample = int(np.random.exponential(sampling_freq))
-
     while m1.t < m1.tmax:
         if sampling_dist == 'exponential':
             # If we're sampling irregularly, check if we've hit the next
@@ -49,10 +44,12 @@ def run_forcing_simulations(m1, m2, increment, sampling_freq=1000, sampling_dist
             should_sample = m1.tc >= next_sample
             if should_sample:
                 next_sample = m1.tc + int(np.random.exponential(sampling_freq))
+        elif increment == 0:
+            ## If increment == 0, just sample at each sampling freq
+            should_sample = (m1.tc % sampling_freq == 0)
         else:
-            # If we're sampling regularly, check if we're at that fixed
-            # interval
-            should_sample = (m1.tc % sampling_freq == 0) or (m1.tc % sampling_freq == increment)
+            ## If sampling at increments, identify indices to sample at
+            should_sample = (m1.tc % sampling_freq == 0) or ((m1.tc % sampling_freq % increment == 0) and m1.tc % sampling_freq <= rollout*increment)
 
         if should_sample:
             # Update the PV of the low-resolution model to match the downscaled
@@ -77,11 +74,11 @@ def run_forcing_simulations(m1, m2, increment, sampling_freq=1000, sampling_dist
                 return np.array([m.F1 * diff, -m.F2 * diff])
 
             save_var('q_forcing_advection', downscaled(advected(m1.q)) - advected(m2.q))
-            save_var('u_forcing_advection', downscaled(advected(m1.ufull)) - advected(m2.ufull))
-            save_var('v_forcing_advection', downscaled(advected(m1.vfull)) - advected(m2.vfull))
-            save_var('streamfunction', m2.p)
+            #save_var('u_forcing_advection', downscaled(advected(m1.ufull)) - advected(m2.ufull))
+            #save_var('v_forcing_advection', downscaled(advected(m1.vfull)) - advected(m2.vfull))
+            #save_var('streamfunction', m2.p)
 
-            save_var('b_forcing_advection', downscaled(uv_diff(m1)) - uv_diff(m2))
+            #save_var('b_forcing_advection', downscaled(uv_diff(m1)) - uv_diff(m2))
 
             def corr(a,b):
                 def data(x):
@@ -92,26 +89,26 @@ def run_forcing_simulations(m1, m2, increment, sampling_freq=1000, sampling_dist
                 from scipy.stats import pearsonr
                 return pearsonr(data(a),data(b))[0]
 
-            save_var('uq_subgrid_flux', m2.ufull * m2.q - downscaled(m1.ufull * m1.q))
-            save_var('vq_subgrid_flux', m2.vfull * m2.q - downscaled(m1.vfull * m1.q))
+            #save_var('uq_subgrid_flux', m2.ufull * m2.q - downscaled(m1.ufull * m1.q))
+            #save_var('vq_subgrid_flux', m2.vfull * m2.q - downscaled(m1.vfull * m1.q))
 
-            save_var('uu_subgrid_flux', m2.ufull**2 - downscaled(m1.ufull**2))
-            save_var('vv_subgrid_flux', m2.vfull**2 - downscaled(m1.vfull**2))
-            save_var('uv_subgrid_flux', m2.ufull * m2.vfull - downscaled(m1.ufull * m1.vfull))
+            #save_var('uu_subgrid_flux', m2.ufull**2 - downscaled(m1.ufull**2))
+            #save_var('vv_subgrid_flux', m2.vfull**2 - downscaled(m1.vfull**2))
+            #save_var('uv_subgrid_flux', m2.ufull * m2.vfull - downscaled(m1.ufull * m1.vfull))
 
             # Now, step both models forward (which recomputes ∂q/∂t)
             m1._step_forward()
             m2._step_forward()
 
             # Store the resulting values of ∂q/∂t
-            save_var('dqdt_through_lores', m2.ifft(m2.dqhdt))
-            save_var('dqdt_through_hires_downscaled', m2.ifft(downscaled(m1.dqhdt)))
+            #save_var('dqdt_through_lores', m2.ifft(m2.dqhdt))
+            #save_var('dqdt_through_hires_downscaled', m2.ifft(downscaled(m1.dqhdt)))
 
             # Finally, store the difference between those two quantities (which
             # serves as an alternate measure of subgrid forcing, that takes
             # into account other differences in the simulations beyond just
             # hi-res vs. lo-res advection)
-            ds['q_forcing_total'] = ds['dqdt_through_hires_downscaled'] - ds['dqdt_through_lores']
+            #ds['q_forcing_total'] = ds['dqdt_through_hires_downscaled'] - ds['dqdt_through_lores']
 
             # Add attributes and units to the xarray dataset
             for key, attrs in util.FORCING_ATTR_DATABASE.items():
@@ -129,9 +126,10 @@ def run_forcing_simulations(m1, m2, increment, sampling_freq=1000, sampling_dist
             m2._step_forward()
 
     # Concatenate the datasets along the time dimension
-    return concat_and_convert(snapshots).assign_attrs(hires=m1.nx, lores=m2.nx)
+    return util.concat_and_convert(snapshots).assign_attrs(hires=m1.nx, lores=m2.nx)
 
-def generate_forcing_dataset(hires=256, lores=64, increment=0, **kw):
+
+def generate_forcing_dataset(hires=256, lores=64, increment=0, rollout=1, **kw):
     forcing_params = {}
     pyqg_params = {}
     for k, v in kw.items():
@@ -152,5 +150,9 @@ def generate_forcing_dataset(hires=256, lores=64, increment=0, **kw):
     m2 = pyqg.QGModel(**params2)
 
     ds = run_forcing_simulations(m1, m2, increment, **forcing_params)
+
+    params2["sampling_freq"]=sampling_freq
+    params2["increment"]=increment
+    params2["rollout"]=rollout
     return ds.assign_attrs(pyqg_params=json.dumps(params2))
 
