@@ -51,13 +51,8 @@ def run_forcing_simulations(m1, m2, increment, rollout=1, sampling_freq=1000, sa
         else:
             ## If sampling at increments, identify indices to sample at
             should_sample = (m1.tc % sampling_freq == 0) or ((m1.tc % sampling_freq % increment == 0) and m1.tc % sampling_freq <= rollout*increment)
-            #print("here??")
-            #print(should_sample)
-            #print("increment=",increment)
-            #print("rollout",rollout)
 
         if should_sample:
-            #print("m1 tc=",m1.tc)
             # Update the PV of the low-resolution model to match the downscaled
             # high-resolution PV
             m2.set_q1q2(*m2.ifft(downscaled(m1.qh)))
