@@ -1,4 +1,5 @@
 import pyqg
+import json
 import numpy as np
 import pyqg_explorer.simulations.util as util
 
@@ -50,8 +51,13 @@ def run_forcing_simulations(m1, m2, increment, rollout=1, sampling_freq=1000, sa
         else:
             ## If sampling at increments, identify indices to sample at
             should_sample = (m1.tc % sampling_freq == 0) or ((m1.tc % sampling_freq % increment == 0) and m1.tc % sampling_freq <= rollout*increment)
+            #print("here??")
+            #print(should_sample)
+            #print("increment=",increment)
+            #print("rollout",rollout)
 
         if should_sample:
+            #print("m1 tc=",m1.tc)
             # Update the PV of the low-resolution model to match the downscaled
             # high-resolution PV
             m2.set_q1q2(*m2.ifft(downscaled(m1.qh)))
@@ -129,7 +135,7 @@ def run_forcing_simulations(m1, m2, increment, rollout=1, sampling_freq=1000, sa
     return util.concat_and_convert(snapshots).assign_attrs(hires=m1.nx, lores=m2.nx)
 
 
-def generate_forcing_dataset(hires=256, lores=64, increment=0, rollout=1, **kw):
+def generate_forcing_dataset(hires=256, sampling_freq=1000, lores=64, increment=0, rollout=1, **kw):
     forcing_params = {}
     pyqg_params = {}
     for k, v in kw.items():
@@ -149,7 +155,7 @@ def generate_forcing_dataset(hires=256, lores=64, increment=0, rollout=1, **kw):
     m1 = pyqg.QGModel(**params1)
     m2 = pyqg.QGModel(**params2)
 
-    ds = run_forcing_simulations(m1, m2, increment, **forcing_params)
+    ds = run_forcing_simulations(m1, m2, increment, rollout=rollout, sampling_freq=sampling_freq, **forcing_params)
 
     params2["sampling_freq"]=sampling_freq
     params2["increment"]=increment
