@@ -460,3 +460,125 @@ class EmulatorAnimation():
         
         return 
         
+#############################################################################################
+###### Functions related to stability tests (i.e. plotting kinetic energy accumulation ######
+###### over time for various different sims)                                           ######
+#############################################################################################
+
+def KE_func(ds_test):
+    """ Get KE from the velocities stored in a dataset """
+    
+    return (ds_test.u**2 + ds_test.v**2) * 0.5
+
+def get_ke_time(ds_test):
+    """ Get an array of kinetic energy over time from a dataset"""
+    
+    ke=KE_func(ds_test)
+    ke_array=[]
+    for snaps in ke:
+        ke_array.append(ds_test.attrs['pyqg:L']*np.sum(snaps.data)/(ds_test.attrs['pyqg:nx'])**2)
+        
+    return ke_array
+
+def load_ensembles(ensemble_path):
+    """ Loop over ensemble members and alphas to build a grid of kinetic energy over time. Assumes we have
+    50 simulations in each ensemble, and alphas range from [1,5,10,15] """
+    
+    grid_ke=np.zeros((4,50,173))
+    spectral_energy=np.zeros((4,50,23))
+    for aa,alpha in enumerate([1,5,10,15]):
+        for bb in range(50):
+            data=xr.open_dataset(ensemble_path+"/alpha_"+str(alpha)+"_run_"+str(bb+1)+".nc")
+            grid_ke[aa][bb]=get_ke_time(data)
+            spectral_energy[aa][bb]=data.ispec_energy_transfer.data
+            
+    return grid_ke,spectral_energy
+
+def plot_KE_alphas(sim_path,label=r"$\mathcal{L}_\theta+\mathcal{L}_\beta$"):
+    """ Function to read a directory of sims with varying alphas, and plot both the spectral energy transfer
+        and the KE accumulation as a function of time for the simulations in question, alongside some reference
+        baselines. We build the data grid using misc.performance.load_ensembles, which assumes we have 50 simulations
+        for each alpha, and the alphas range [1,5,10,15].
+        
+        sim_path: path to the ensemble of sims
+        label: custom label for the KE(time) plot for these sims
+        """
+    
+    ## Load xarray data for each snapshot, and extract both the spectra energy and KE(time) for all different alphas
+    alpha_data,spectral_data=load_ensembles(sim_path)
+    
+    ## Assuming our test sims are 64^2, use a standardised wavenumber array
+    spectral_k=np.array([4.44288294e-06, 1.33286488e-05, 2.22144147e-05, 3.11001806e-05,
+           3.99859464e-05, 4.88717123e-05, 5.77574782e-05, 6.66432441e-05,
+           7.55290099e-05, 8.44147758e-05, 9.33005417e-05, 1.02186308e-04,
+           1.11072073e-04, 1.19957839e-04, 1.28843605e-04, 1.37729371e-04,
+           1.46615137e-04, 1.55500903e-04, 1.64386669e-04, 1.73272435e-04,
+           1.82158200e-04, 1.91043966e-04, 1.99929732e-04])
+    model_time=np.linspace(0,20,87*2-1)
+    
+    ## Load reference comparison (hardcoded to a pure-offline parameterised sim for now)
+    with open("/scratch/cp3759/pyqg_data/sims/KE_accumulation/offline_only_test/cached_data.p", "rb") as input_file:
+        cached_data = pickle.load(input_file)
+    reference_alpha=cached_data[0]
+    reference_spectral=cached_data[1]
+    
+    ## Load low res and high res for spectra
+    low_res=xr.open_dataset('/scratch/cp3759/pyqg_data/sims/online_test_reference_sims/test_sim_641.nc')
+    high_res=xr.open_dataset('/scratch/cp3759/pyqg_data/sims/online_test_reference_sims/test_sim_2561.nc')
+    
+    ## Extract KE(time) data for high res, alpha=1
+    hires=np.zeros((50,173))
+    for aa in range(50):
+        entry_string="/scratch/cp3759/pyqg_data/sims/KE_accumulation/hires/highre%ds_1" % (aa+1)
+        data=xr.open_dataset(entry_string)
+        hires[aa]=get_ke_time(data)
+    
+    ## Initialise figure
+    fig, axs = plt.subplots(1, 3,figsize=(14,4))
+    
+    ## Plot spectral energy transfer
+    axs[0].plot(high_res.ispec_k.data,high_res.ispec_energy_transfer.data,label=r"$256^2$",lw=3,color="black")
+    axs[0].plot(low_res.ispec_k.data,low_res.ispec_energy_transfer.data,label=r"$64^2$",linestyle="-.",color="black")
+    axs[0].plot(spectral_k,np.mean(reference_spectral[0],axis=0),color="green",label=r"$64^2+\mathcal{L}_\theta$")
+    axs[0].fill_between(spectral_k,np.mean(reference_spectral[0],axis=0)-np.std(reference_spectral[0],axis=0),np.mean(reference_spectral[0],axis=0)+np.std(reference_spectral[0],axis=0),color="green",alpha=0.2)
+    axs[0].plot(spectral_k,np.mean(spectral_data[0],axis=0),color="red",label=r"$64^2+$%s" % label)
+    axs[0].fill_between(spectral_k,np.mean(spectral_data[0],axis=0)-np.std(spectral_data[0],axis=0),np.mean(spectral_data[0],axis=0)+np.std(spectral_data[0],axis=0),color="red",alpha=0.2)
+    axs[0].set_xscale("log")
+    axs[0].set_xlim(4e-6,2e-4)
+    axs[0].set_ylabel(r"$\partial_t E$ [$m^3/s^3$]")
+    axs[0].set_xlabel(r"k [$m^{-1}$]")
+    axs[0].legend()
+
+    ## Set titles for KE(time) plot
+    axs[1].set_title(r"$\mathcal{L}_\theta$")
+    axs[2].set_title(r"%s" % label)
+
+    ## Plot KE accumulation
+    cols=["blue","green","orange","pink"]
+    alphas=[1,5,10,15]
+    for aa in range(len(alpha_data)):
+        axs[1].plot(model_time,np.mean(reference_alpha[aa],axis=0),color=cols[aa],label=r"$64^2, \alpha=$ %d" % alphas[aa])
+        axs[1].fill_between(model_time,np.mean(reference_alpha[aa],axis=0)-np.std(reference_alpha[aa],axis=0),np.mean(reference_alpha[aa],axis=0)+np.std(reference_alpha[aa],axis=0),color=cols[aa],alpha=0.2)
+        axs[2].plot(model_time,np.mean(alpha_data[aa],axis=0),color=cols[aa],label=r"$64^2, \alpha=$ %d" % alphas[aa])
+        axs[2].fill_between(model_time,np.mean(alpha_data[aa],axis=0)-np.std(alpha_data[aa],axis=0),np.mean(alpha_data[aa],axis=0)+np.std(alpha_data[aa],axis=0),color=cols[aa],alpha=0.2)
+    axs[1].legend()
+
+    axs[1].plot(model_time,np.mean(hires,axis=0),color="black"s,label=r"$256^2, \alpha=1$")
+    axs[1].fill_between(model_time,np.mean(hires,axis=0)-np.std(hires,axis=0),np.mean(hires,axis=0)+np.std(hires,axis=0),color="black",alpha=0.2)
+
+    axs[2].plot(model_time,np.mean(hires,axis=0),color="black",label=r"$256^2, \alpha=1$")
+    axs[2].fill_between(model_time,np.mean(hires,axis=0)-np.std(hires,axis=0),np.mean(hires,axis=0)+np.std(hires,axis=0),color="black",alpha=0.2)
+
+    ## Some final figure config
+    axs[1].set_ylim(0,6000)
+    axs[2].set_ylim(0,6000)
+    axs[1].set_ylabel("KE (time)")
+    axs[1].set_xlabel("Model time (years)")
+    axs[2].set_xlabel("Model time (years)")
+    axs[2].yaxis.set_ticklabels([])
+
+    plt.subplots_adjust(wspace=0.0,hspace=0.01)
+    plt.tight_layout()
+    
+    return
+
