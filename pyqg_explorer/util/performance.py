@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
 import xarray as xr
+import pickle
 
 import matplotlib.animation as animation
 from IPython.display import HTML
@@ -563,7 +564,7 @@ def plot_KE_alphas(sim_path,label=r"$\mathcal{L}_\theta+\mathcal{L}_\beta$"):
         axs[2].fill_between(model_time,np.mean(alpha_data[aa],axis=0)-np.std(alpha_data[aa],axis=0),np.mean(alpha_data[aa],axis=0)+np.std(alpha_data[aa],axis=0),color=cols[aa],alpha=0.2)
     axs[1].legend()
 
-    axs[1].plot(model_time,np.mean(hires,axis=0),color="black"s,label=r"$256^2, \alpha=1$")
+    axs[1].plot(model_time,np.mean(hires,axis=0),color="black",label=r"$256^2, \alpha=1$")
     axs[1].fill_between(model_time,np.mean(hires,axis=0)-np.std(hires,axis=0),np.mean(hires,axis=0)+np.std(hires,axis=0),color="black",alpha=0.2)
 
     axs[2].plot(model_time,np.mean(hires,axis=0),color="black",label=r"$256^2, \alpha=1$")
