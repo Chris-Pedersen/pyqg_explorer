@@ -10,6 +10,7 @@ class Parameterization(pyqg.QParameterization):
         """ Initialise with a list of torch models, one for each layer """
         self.model=model
         self.model.eval() ## Ensure we are in eval
+        self.type="CNN"
         self.normalise=normalise
         self.cache_forcing=cache_forcing
         self.cached_forcing=None
@@ -65,6 +66,7 @@ class ZannaBolton2020Q(pyqg.parameterizations.QParameterization):
         """
 
         self.constant = constant
+        self.type="ZB"
         self.cache_forcing=cache_forcing
         self.cached_forcing=None
         
@@ -129,6 +131,7 @@ class BackscatterBiharmonic(pyqg.parameterizations.QParameterization):
 
         self.smagorinsky = pyqg.parameterizations.Smagorinsky(smag_constant)
         self.back_constant = back_constant
+        self.type = "Bscat"
         self.eps = eps
         self.cache_forcing=cache_forcing
         self.cached_forcing=None
