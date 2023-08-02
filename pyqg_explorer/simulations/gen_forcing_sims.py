@@ -5,6 +5,10 @@ import pyqg_explorer.simulations.util as util
 
 
 def run_forcing_simulations(m1, m2, increment, rollout=1, sampling_freq=1000, sampling_dist='uniform', downscaling='spectral', **kw):
+    """ increment: what size dt to store at each sample
+        rollout: number of increment steps to store
+        sampling_freq: how many timesteps to wait in total before starting a new sampling point
+        """
     def downscaled(hires_var):
         if downscaling == 'spectral':
             return util.spectral_filter_and_coarsen(hires_var, m1, m2, **kw)
@@ -131,6 +135,10 @@ def run_forcing_simulations(m1, m2, increment, rollout=1, sampling_freq=1000, sa
 
 
 def generate_forcing_dataset(hires=256, sampling_freq=1000, lores=64, increment=0, rollout=1, **kw):
+    """ increment: what size dt to store at each sample
+        rollout: number of increment steps to store
+        sampling_freq: how many timesteps to wait in total before starting a new sampling point
+        """
     forcing_params = {}
     pyqg_params = {}
     for k, v in kw.items():
