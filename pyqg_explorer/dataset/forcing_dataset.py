@@ -421,7 +421,7 @@ class EmulatorForcingDataset(BaseDataset):
             y_out=torch.stack((q_t_upper,q_t_lower),dim=0)
             return (x_out,y_out)
 
-class RolloutDataset(BaseDataset):
+class RolloutDataset(dataset.BaseDataset):
     """
     x_data is q_i, y_data is s_i
     """
@@ -455,32 +455,32 @@ class RolloutDataset(BaseDataset):
         self.num_sims=num_sims
         self.cuts=None
         
-        self.x_data=torch.tensor([])
+        self.q_data=torch.tensor([])
         if self.subgrid_forcing:
-            self.y_data=torch.tensor([])
+            self.s_data=torch.tensor([])
         else:
-            self.y_data=None
+            self.s_data=None
             
         ## Populate dataset
         self._build_dataset()
         
-        ## Do normalisation
-        self.q_mean_upper,self.q_mean_lower=self.x_data.mean(dim=[0,2,3,4])
-        self.q_std_upper,self.q_std_lower=self.x_data.std(dim=[0,2,3,4])
+        ## Find normalisation factors
+        self.q_mean_upper,self.q_mean_lower=self.q_data.mean(dim=[0,2,3,4])
+        self.q_std_upper,self.q_std_lower=self.q_data.std(dim=[0,2,3,4])
         if self.subgrid_forcing:
-            self.s_mean_upper,self.s_mean_lower=self.y_data.mean(dim=[0,2,3,4])
-            self.s_std_upper,self.s_std_lower=self.y_data.std(dim=[0,2,3,4])
+            self.s_mean_upper,self.s_mean_lower=self.s_data.mean(dim=[0,2,3,4])
+            self.s_std_upper,self.s_std_lower=self.s_data.std(dim=[0,2,3,4])
         
-        self.len=len(self.x_data)
+        self.len=len(self.q_data)
         ## Generate shuffled list of indices
         self._get_split_indices()
     
     def _get_cuts(self,data):
         """ For a requested increment and rollout, find a list of indices to subsample the correct snapshots from the full dataset """
-        data_attrs=json.loads(data_full.attrs['pyqg_params'])
+        data_attrs=json.loads(data.attrs['pyqg_params'])
         self.data_increment=data_attrs["increment"]
         self.data_rollout=data_attrs["rollout"]
-        self.num_rollouts=int(len(data_full.time)/(self.data_rollout+1))
+        self.num_rollouts=int(len(data.time)/(self.data_rollout+1))
         cuts=np.array([],dtype=int)
         for aa in range(self.num_rollouts):
             cuts=np.append(cuts,aa*self.data_rollout+np.arange(0,int((self.increment/self.data_increment)*self.rollout+1),int(self.increment/self.data_increment)))
@@ -489,21 +489,21 @@ class RolloutDataset(BaseDataset):
     
     def _build_dataset(self):
         """ Loop over subgrid forcing models, and simulation ensembles to populate a dataset. For each sim, subsample from the relevant
-            snapshots, and concat these into x (q_i), and y (s_i) data """
+            snapshots, and concat these into q_i (and s_i if requested) data """
     
         for subgrid_model in self.subgrid_models:
             if subgrid_model=="HRC":
                 subgrid_model="None"
             for aa in range(1,self.num_sims):
                 data_path=self.file_path+"rollout_"+subgrid_model+"_"+str(aa)+".nc"
-                sim_data=self._load_and_cut_data(data_path,self.subgrid_forcing)
-                self.x_data=torch.cat((self.x_data,sim_data[0]))
+                sim_data=self._load_and_cut_data(data_path,subgrid_model,self.subgrid_forcing)
+                self.q_data=torch.cat((self.q_data,sim_data[0]))
                 if self.subgrid_forcing:
-                    self.y_data=torch.cat((self.y_data,sim_data[1]))
+                    self.s_data=torch.cat((self.s_data,sim_data[1]))
                     
         return
     
-    def _load_and_cut_data(self,data_path,subgrid_forcing=False):
+    def _load_and_cut_data(self,data_path,subgrid_model,subgrid_forcing=False):
         """ For a given simulation, extract the relevant snapshots. Concat into torch tensors of the appropriate shape. Concat to the self.x
         (and self.y) datasets """
         data_full=xr.open_dataset(data_path)
@@ -523,7 +523,10 @@ class RolloutDataset(BaseDataset):
         ## Reshape
         torch_q=torch.tensor(data_full.q[self.cuts].to_numpy()).view(self.num_rollouts,2,self.rollout+1,64,64)
         if subgrid_forcing:
-            torch_s=torch.tensor(data_full.q_subgrid_forcing[cuts].to_numpy()).view(self.num_rollouts,2,rollout+1,64,64)
+            if subgrid_model=="None":
+                torch_s=torch.tensor(data_full.q_forcing_advection[self.cuts].to_numpy()).view(self.num_rollouts,2,self.rollout+1,64,64)
+            else:
+                torch_s=torch.tensor(data_full.q_subgrid_forcing[self.cuts].to_numpy()).view(self.num_rollouts,2,self.rollout+1,64,64)
             return [torch_q,torch_s]
         else:
             return [torch_q]
@@ -533,4 +536,17 @@ class RolloutDataset(BaseDataset):
         return self.len
     
     def __getitem__(self, idx):
-        return 
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        ## Return normalised arrays
+        q_upper=transforms.normalise_field(self.q_data[idx][0],self.q_mean_upper,self.q_std_upper)
+        q_lower=transforms.normalise_field(self.q_data[idx][1],self.q_mean_lower,self.q_std_lower)
+        q_out=torch.stack((q_upper,q_lower),dim=0)
+        if self.subgrid_forcing: 
+            s_upper=transforms.normalise_field(self.s_data[idx][0],self.s_mean_upper,self.s_std_upper)
+            s_lower=transforms.normalise_field(self.s_data[idx][1],self.s_mean_lower,self.s_std_lower)
+            s_out=torch.stack((s_upper,s_lower),dim=0)
+            return (q_out,s_out)
+        else:
+            return q_out
+            
