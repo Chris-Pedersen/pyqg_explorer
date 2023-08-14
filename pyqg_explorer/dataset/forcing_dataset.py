@@ -1,9 +1,11 @@
 import torch
 import math
+import json
 import numpy as np
 import xarray as xr
 import pyqg_explorer.util.transforms as transforms
 from torch.utils.data import Dataset
+
 
 
 class BaseDataset(Dataset):
@@ -421,7 +423,8 @@ class EmulatorForcingDataset(BaseDataset):
             y_out=torch.stack((q_t_upper,q_t_lower),dim=0)
             return (x_out,y_out)
 
-class RolloutDataset(dataset.BaseDataset):
+
+class RolloutDataset(BaseDataset):
     """
     x_data is q_i, y_data is s_i
     """
@@ -507,6 +510,7 @@ class RolloutDataset(dataset.BaseDataset):
         """ For a given simulation, extract the relevant snapshots. Concat into torch tensors of the appropriate shape. Concat to the self.x
         (and self.y) datasets """
         data_full=xr.open_dataset(data_path)
+        print(data_path)
         ## Make relevant cuts if we are dropping spin-up snapshots
         if self.drop_spin_up==True:
             ## Hardcode the timeslice assuming sampling freq of 1000 timesteps
@@ -549,4 +553,3 @@ class RolloutDataset(dataset.BaseDataset):
             return (q_out,s_out)
         else:
             return q_out
-            
