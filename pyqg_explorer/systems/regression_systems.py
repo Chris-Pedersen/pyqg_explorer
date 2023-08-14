@@ -148,3 +148,28 @@ class ResidualRegressionSystemStd(BaseRegSytem):
         self.log(f"{kind}_loss", normal_loss, on_step=False, on_epoch=True) 
         return loss
 
+
+class ResidualRollout(BaseRegSytem):
+    """ Define loss with respect to the residuals. Expect y_data *not* to be
+    a residual value, but calculate residuals in the loss """
+    def __init__(self,network,config:dict):
+        super().__init__(network,config)
+
+    def step(self,batch,kind):
+        """ Evaluate loss function """
+        x_data = batch
+        
+        loss=0
+        
+        for aa in range(0,x_data.shape[2]-1):
+            if aa==0:
+                x_t=x_data[:,:,0,:,:]
+            else:
+                x_t=x_dt+x_t
+            x_dt=self(x_t)
+            loss_dt=self.criterion(x_dt,x_data[:,:,aa+1,:,:]-x_data[:,:,aa,:,:])
+            self.log(f"{kind}_loss_%d" % aa, loss_dt, on_step=False, on_epoch=True)
+            loss+=loss_dt
+            
+        self.log(f"{kind}_loss", loss, on_step=False, on_epoch=True) 
+        return loss
