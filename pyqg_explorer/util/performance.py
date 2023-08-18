@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
 import xarray as xr
 import pickle
+import pyqg
 
 import matplotlib.animation as animation
 from IPython.display import HTML
@@ -233,6 +234,91 @@ class ParameterizationPerformance():
         axs[1].plot(line,line,linestyle="dashed",color="gray",alpha=0.5)
         ax=axs[1].hist2d(self.y_true[:,1,:,:].flatten(),self.y_pred[:,1,:,:].flatten(),bins=100,range=[[-4,4],[-4,4]],cmap='RdPu');
         fig.colorbar(ax[3], ax=axs[1])
+        return fig
+
+    def subgrid_energy(self):
+        """ Plot contribution of energy flux from subgrid forcing model. Can be calculated offline. We use eqs
+            E2-E4 of arxiv.org/abs/2302.07984 to estimate the energy contribution from the subgrid model, which
+            comes from Re(conj(fft(psi)))*fft(S)
+
+            We use the stored normalisation factors to convert the q and s fields back into physical units.
+            Then reconstruct streamfunction, psi, using pyqg inversion method. Then combine this with the subgrid
+            forcing field to determine the energy contribution from the subgrid model.
+
+            Currently this is hardcoded to work with a 64x64 coarse resolution system, as this is all I am working with
+            for now. Have added an assertion to this effect - if we work with other resolutions will have to extend this
+            to work dynamically with different resolutions.
+
+            """
+        assert self.x_np.shape[-1]==64, "Only works with 64x64 coarse system so far"
+        
+        ## Denorm to physical units using normalisation factors that the model was trained using
+        q_upper=(self.x_np[:,0]*self.network.config["q_std_upper"].numpy())+self.network.config["q_mean_upper"].numpy()
+        q_lower=(self.x_np[:,1]*self.network.config["q_std_lower"].numpy())+self.network.config["q_mean_lower"].numpy()
+
+        s_true_upper=(self.y_true[:,0]*self.network.config["s_std_upper"].numpy())+self.network.config["s_mean_upper"].numpy()
+        s_true_lower=(self.y_true[:,1]*self.network.config["s_std_lower"].numpy())+self.network.config["s_mean_lower"].numpy()
+        
+        s_pred_upper=(self.y_pred[:,0]*self.network.config["s_std_upper"].numpy())+self.network.config["s_mean_upper"].numpy()
+        s_pred_lower=(self.y_pred[:,1]*self.network.config["s_std_lower"].numpy())+self.network.config["s_mean_lower"].numpy()
+        
+        self.denormed_q=np.stack((q_upper,q_lower),axis=1).astype(np.float64)
+        self.denormed_s_true=np.stack((s_true_upper,s_true_lower),axis=1).astype(np.float64)
+        self.denormed_s_pred=np.stack((s_pred_upper,s_pred_lower),axis=1).astype(np.float64)
+
+        ## Use pyqg inversion function to get streamfunction, psi
+        ## Hardcode to 64x64 images for now
+        self.psi=np.empty((len(self.denormed_q),2,64,64))
+        self.de_dt_true=np.empty((len(self.denormed_q),2,32))
+        self.de_dt_pred=np.empty((len(self.denormed_q),2,32))
+        
+        m = pyqg.QGModel(log_level = 0)
+        for aa in range(len(self.denormed_q)):
+            m.q = self.denormed_q[aa]
+            m._invert()
+            self.psi[aa]=(m.to_dataset().p).to_numpy()
+            
+            ## Take FFT of stream function and subgrid forcing
+            fftpsi=np.fft.rfftn(self.psi[aa], axes=(-2,-1))/(64**2)
+            fftsubgrid_true=np.fft.rfftn(self.denormed_s_true[aa], axes=(-2,-1))/(64**2)
+            fftsubgrid_pred=np.fft.rfftn(self.denormed_s_pred[aa], axes=(-2,-1))/(64**2)
+
+            ## Combine to form dE/dt
+            dt_true=np.real(np.conj(fftpsi)) * fftsubgrid_true
+            dt_pred=np.real(np.conj(fftpsi)) * fftsubgrid_pred
+            
+            ## Get isotropic spectra for upper and lower layers
+            spectra_true=[]
+            spectra_pred=[]
+            
+            ## Do upper and lower layers
+            for z in [0,1]:
+                k, sp = pyqg.diagnostic_tools.calc_ispec(m, dt_true[z,:,:], averaging=False, truncate=False)
+                spectra_true.append(-sp)
+                k, sp = pyqg.diagnostic_tools.calc_ispec(m, dt_pred[z,:,:], averaging=False, truncate=False)
+                spectra_pred.append(-sp)
+            
+            ## Convert to array
+            self.k=k
+            self.de_dt_true[aa]=np.array(spectra_true)
+            self.de_dt_pred[aa]=np.array(spectra_pred)
+
+        
+        
+        fig, axs = plt.subplots(1, 2,figsize=(13,5))
+
+        axs[0].set_title("Energy contribution from subgrid forcing, upper layer")
+        axs[0].plot(self.k,np.mean(self.de_dt_pred,axis=0)[0],label="ML model")
+        axs[0].plot(self.k,np.mean(self.de_dt_true,axis=0)[0],label="true")
+        axs[0].legend()
+        axs[0].set_ylabel(r"$\frac{dE}{dt}$ by subgrid forcing")
+        axs[0].set_xlabel("wavenumber (1/m)")
+        axs[1].set_title("Lower layer")
+        axs[1].plot(self.k,np.mean(self.de_dt_pred,axis=0)[1],label="ML model")
+        axs[1].plot(self.k,np.mean(self.de_dt_true,axis=0)[1],label="true")
+        axs[1].set_xlabel("wavenumber (1/m)")
+        plt.tight_layout()
+        
         return fig
         
     def get_fields(self,map_index=None):
