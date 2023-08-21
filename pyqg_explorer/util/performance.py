@@ -515,6 +515,8 @@ class EmulatorAnimation():
         self.mse=[]
         self.correlation_upper=[]
         self.correlation_lower=[]
+        self.autocorrelation_upper=[]
+        self.autocorrelation_lower=[]
         self.criterion=nn.MSELoss()
         self.times=np.arange(0,self.nFrames*self.model.config["time_horizon"]+0.01,self.model.config["time_horizon"])
         
@@ -546,6 +548,8 @@ class EmulatorAnimation():
         
         self.correlation_upper.append(pearsonr(self.q_i_pred[0].flatten(),self.q_ds[self.ds_i,0].to_numpy().flatten())[0])
         self.correlation_lower.append(pearsonr(self.q_i_pred[1].flatten(),self.q_ds[self.ds_i,1].to_numpy().flatten())[0])
+        self.autocorrelation_upper.append(pearsonr(self.q_ds[0,0].to_numpy().flatten(),self.q_ds[self.ds_i,0].to_numpy().flatten())[0])
+        self.autocorrelation_lower.append(pearsonr(self.q_ds[0,1].to_numpy().flatten(),self.q_ds[self.ds_i,1].to_numpy().flatten())[0])
         self.mse.append(self.criterion(torch.tensor(self.q_i_pred),torch.tensor(self.q_ds[self.ds_i].to_numpy())))
         
         return
@@ -583,11 +587,11 @@ class EmulatorAnimation():
         
         ## Time evol metrics
         axs[0][3].set_title("Correlation")
-        self.ax7=axs[0][3].plot(-1)
+        self.ax7=[axs[0][3].plot(-1),axs[0][3].plot(-1)]
         axs[0][3].set_ylim(0,1)
         axs[0][3].set_xlim(0,self.times[-1])
         
-        self.ax8=axs[1][3].plot(-1)
+        self.ax8=[axs[1][3].plot(-1),[axs[1][3].plot(-1)]]
         axs[1][3].set_ylim(0,1)
         axs[1][3].set_xlim(0,self.times[-1])
         
@@ -638,11 +642,17 @@ class EmulatorAnimation():
         self.ax6.set_array(image)
         self.ax6.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
  
-        self.ax7[0].set_xdata(np.array(self.times[0:len(self.correlation_upper)]))
-        self.ax7[0].set_ydata(np.array(self.correlation_upper))
+        self.ax7[0][0].set_xdata(np.array(self.times[0:len(self.correlation_upper)]))
+        self.ax7[0][0].set_ydata(np.array(self.correlation_upper))
         
-        self.ax8[0].set_xdata(np.array(self.times[0:len(self.correlation_lower)]))
-        self.ax8[0].set_ydata(np.array(self.correlation_lower))
+        self.ax7[1][0].set_xdata(np.array(self.times[0:len(self.autocorrelation_upper)]))
+        self.ax7[1][0].set_ydata(np.array(self.autocorrelation_upper))
+        
+        self.ax8[0][0].set_xdata(np.array(self.times[0:len(self.correlation_lower)]))
+        self.ax8[0][0].set_ydata(np.array(self.correlation_lower))
+                  
+        self.ax8[1][0].set_xdata(np.array(self.times[0:len(self.autocorrelation_lower)]))
+        self.ax8[1][0].set_ydata(np.array(self.autocorrelation_lower))
         
         self._push_forward()
         
