@@ -17,7 +17,7 @@ import cmocean
 
 class EmulatorPerformance():
     """ Object to store performance tests relevant to neural emulators """
-    def __init__(self,network,valid_loader,threshold):
+    def __init__(self,network,valid_loader,threshold,rollout=False):
         """ network:  Torch model we want to test. Assuming this is a model for the subgrid forcing
             valid_loader: torch dataloader with the validation set
                           NB we are assuming this is an EmulatorForcingDataset, where the
@@ -34,18 +34,31 @@ class EmulatorPerformance():
         self.x_np=[]
         self.y_true=[] ## Let's store the i+1 field
         self.y_pred=[] ## for both true and predicted
+        self.rollout=rollout
         
         count=0
-        ## Cache x, true y and predicted y values that we will use to guage offline performance
-        for data in valid_loader:
-            x=data[0]
-            y=data[1]
-            count+=x.shape[0]
-            self.x_np.append(x)
-            self.y_true.append(y)
-            self.y_pred.append(self.network(x)+x[:,0:2,:,:]) ## y pred should now be the same quantity, q_i+dt
-            if count>threshold:
-                break
+        if self.rollout==False:
+            ## Cache x, true y and predicted y values that we will use to guage offline performance
+            for data in valid_loader:
+                x=data[0]
+                y=data[1]
+                count+=x.shape[0]
+                self.x_np.append(x)
+                self.y_true.append(y)
+                self.y_pred.append(self.network(x)+x[:,0:2,:,:]) ## y pred should now be the same quantity, q_i+dt
+                if count>threshold:
+                    break
+        else:
+            ## Cache x, true y and predicted y values that we will use to guage offline performance
+            for data in valid_loader:
+                x=data
+                count+=x.shape[0]
+                self.x_np.append(x[:,:,0,:,:])
+                self.y_true.append(x[:,:,1,:,:])
+                self.y_pred.append(self.network(x[:,:,0,:,:])+x[:,:,0,:,:]) ## y pred should now be the same quantity, q_i+dt
+                if count>threshold:
+                    break
+            
         self.x_np=torch.vstack(self.x_np).detach().numpy()
         self.y_true=torch.vstack(self.y_true).detach().numpy()
         self.y_pred=torch.vstack(self.y_pred).detach().numpy()
