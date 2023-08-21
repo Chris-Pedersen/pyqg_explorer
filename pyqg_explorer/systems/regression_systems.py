@@ -167,7 +167,7 @@ class ResidualRollout(BaseRegSytem):
             else:
                 x_t=x_dt+x_t
             x_dt=self(x_t)
-            loss_dt=self.criterion(x_dt,x_data[:,:,aa+1,:,:]-x_data[:,:,aa,:,:])
+            loss_dt=self.criterion(x_dt,x_data[:,:,aa+1,:,:]-x_data[:,:,aa,:,:])*np.exp(-aa*self.config["decay_coeff"])
             self.log(f"{kind}_loss_%d" % aa, loss_dt, on_step=False, on_epoch=True)
             loss+=loss_dt
             
