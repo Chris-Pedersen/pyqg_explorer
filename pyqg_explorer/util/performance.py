@@ -443,14 +443,21 @@ class ParameterizationPerformance():
         axs[2].plot(x_years,get_ke_time(ds),label="This tested model!",linestyle="-.",lw=2)
         return fig
 
+
 class EmulatorAnimation():
-    def __init__(self,q_ds,model,fps=10,nSeconds=20,normalise=True):
+    def __init__(self,q_ds,model,fps=10,nSteps=1000,normalise=True):
         self.q_ds=q_ds
         self.model=model
         self.fps = fps
-        self.nSeconds = nSeconds
+        self.nSteps = nSteps
+        self.nFrames = int(self.nSteps/self.model.config["time_horizon"])
         self.q_i_pred=q_ds[0].data
         self.normalise=normalise
+        self.mse=[]
+        self.correlation_upper=[]
+        self.correlation_lower=[]
+        self.criterion=nn.MSELoss()
+        self.times=np.arange(0,self.nFrames*self.model.config["time_horizon"]+0.01,self.model.config["time_horizon"])
         
     def _push_forward(self):
         """ Update predicted q by one emulator pass """
@@ -478,24 +485,28 @@ class EmulatorAnimation():
                     
         self.q_i_pred=self.q_i_pred+q_i_dt
         
+        self.correlation_upper.append(pearsonr(self.q_i_pred[0].flatten(),self.q_ds[self.ds_i,0].to_numpy().flatten())[0])
+        self.correlation_lower.append(pearsonr(self.q_i_pred[1].flatten(),self.q_ds[self.ds_i,1].to_numpy().flatten())[0])
+        self.mse.append(self.criterion(torch.tensor(self.q_i_pred),torch.tensor(self.q_ds[self.ds_i].to_numpy())))
+        
         return
     
     def animate(self):
-        fig, axs = plt.subplots(2, 3,figsize=(12,6))
+        fig, axs = plt.subplots(2, 4,figsize=(14,6))
         self.ax1=axs[0][0].imshow(self.q_ds[0].data[0], cmap=cmocean.cm.balance)
         fig.colorbar(self.ax1, ax=axs[0][0])
         axs[0][0].set_xticks([]); axs[0][0].set_yticks([])
-        axs[0][0].set_title("true i+dt")
+        axs[0][0].set_title("PyQG")
 
         self.ax2=axs[0][1].imshow(self.q_ds[0].data[0], cmap=cmocean.cm.balance, interpolation='none')
         fig.colorbar(self.ax2, ax=axs[0][1])
         axs[0][1].set_xticks([]); axs[0][1].set_yticks([])
-        axs[0][1].set_title("pred i+dt")
+        axs[0][1].set_title("Emulator")
 
         self.ax3=axs[0][2].imshow(self.q_ds[0].data[0], cmap=cmocean.cm.balance, interpolation='none')
         fig.colorbar(self.ax3, ax=axs[0][2])
         axs[0][2].set_xticks([]); axs[0][2].set_yticks([])
-        axs[0][2].set_title("diff")
+        axs[0][2].set_title("Residuals")
 
         fig.tight_layout()
 
@@ -511,15 +522,25 @@ class EmulatorAnimation():
         cb6=fig.colorbar(self.ax6, ax=axs[1][2])
         axs[1][2].set_xticks([]); axs[1][2].set_yticks([])
         
-        self.time_text=axs[0][2].text(-20,-20,"HELLO THERE")
+        ## Time evol metrics
+        axs[0][3].set_title("Correlation")
+        self.ax7=axs[0][3].plot(-1)
+        axs[0][3].set_ylim(0,1)
+        axs[0][3].set_xlim(0,self.times[-1])
+        
+        self.ax8=axs[1][3].plot(-1)
+        axs[1][3].set_ylim(0,1)
+        axs[1][3].set_xlim(0,self.times[-1])
+        
+        self.time_text=axs[0][2].text(-20,-20,"")
         
         fig.tight_layout()
         
         anim = animation.FuncAnimation(
                                        fig, 
                                        self.animate_func, 
-                                       frames = self.nSeconds * self.fps,
-                                       interval = 250 / self.fps, # in ms
+                                       frames = self.nFrames,
+                                       interval = 1000 / self.fps, # in ms
                                        )
         plt.close()
         
@@ -529,10 +550,12 @@ class EmulatorAnimation():
         if i % self.fps == 0:
             print( '.', end ='' )
             
-        self.time_text.set_text("%d timesteps" % (i*10))
+        self.i=i
+        self.ds_i=i*self.model.config["time_horizon"]
+        self.time_text.set_text("%d timesteps" % (i*self.model.config["time_horizon"]))
     
         ## Set image and colorbar for each panel
-        image=self.q_ds[i].data[0]
+        image=self.q_ds[self.ds_i].data[0]
         self.ax1.set_array(image)
         self.ax1.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
         
@@ -540,7 +563,7 @@ class EmulatorAnimation():
         self.ax2.set_array(image)
         self.ax2.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
         
-        image=self.q_i_pred[0]-self.q_ds[i].data[0]
+        image=self.q_i_pred[0]-self.q_ds[self.ds_i].data[0]
         self.ax3.set_array(image)
         self.ax3.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
         
@@ -552,9 +575,15 @@ class EmulatorAnimation():
         self.ax5.set_array(image)
         self.ax5.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
         
-        image=self.q_i_pred[1]-self.q_ds[i].data[1]
+        image=self.q_i_pred[1]-self.q_ds[self.ds_i].data[1]
         self.ax6.set_array(image)
         self.ax6.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+ 
+        self.ax7[0].set_xdata(np.array(self.times[0:len(self.correlation_upper)]))
+        self.ax7[0].set_ydata(np.array(self.correlation_upper))
+        
+        self.ax8[0].set_xdata(np.array(self.times[0:len(self.correlation_lower)]))
+        self.ax8[0].set_ydata(np.array(self.correlation_lower))
         
         self._push_forward()
         
