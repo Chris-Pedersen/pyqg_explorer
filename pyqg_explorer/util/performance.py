@@ -591,7 +591,7 @@ class EmulatorAnimation():
         axs[0][3].set_ylim(0,1)
         axs[0][3].set_xlim(0,self.times[-1])
         
-        self.ax8=[axs[1][3].plot(-1),[axs[1][3].plot(-1)]]
+        self.ax8=[axs[1][3].plot(-1),axs[1][3].plot(-1)]
         axs[1][3].set_ylim(0,1)
         axs[1][3].set_xlim(0,self.times[-1])
         
