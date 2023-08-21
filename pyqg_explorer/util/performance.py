@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
+from scipy.stats import pearsonr
 import xarray as xr
 import pickle
 import pyqg
@@ -12,6 +13,7 @@ from IPython.display import HTML
 import pyqg_explorer.util.powerspec as powerspec
 import pyqg_explorer.parameterizations.parameterizations as parameterizations
 import pyqg_explorer.generate_datasets as generate_datasets
+import pyqg_explorer.util.transforms as transforms
 import cmocean
 
 
@@ -36,6 +38,10 @@ class EmulatorPerformance():
         self.y_pred=[] ## for both true and predicted
         self.rollout=rollout
         
+        if valid_loader is not None:
+            self._populate_fields
+
+    def _populate_fields(self):
         count=0
         if self.rollout==False:
             ## Cache x, true y and predicted y values that we will use to guage offline performance
@@ -79,6 +85,51 @@ class EmulatorPerformance():
         axs[1].plot(line,line,linestyle="dashed",color="gray",alpha=0.5)
         ax=axs[1].hist2d(self.y_true[:,1,:,:].flatten()-self.x_np[:,1,:,:].flatten(),self.y_pred[:,1,:,:].flatten()-self.x_np[:,1,:,:].flatten(),bins=100,range=[[-0.1,0.1],[-0.1,0.1]],cmap='RdPu');
         fig.colorbar(ax[3], ax=axs[1])
+        return fig
+    
+    def get_correlation(self,time_rollout=1000):
+        """ Plot correlation over time with respect to a standard test simulation """
+        
+        timesteps=np.arange(0,time_rollout+0.01,self.network.config["time_horizon"],dtype=int)
+
+        ds=xr.load_dataset("/scratch/cp3759/pyqg_data/sims/animation_sims/lowres_3k.nc")
+        ds=ds.q
+
+        q_i_pred=ds[0].to_numpy()
+
+        correlation_upper=[]
+        correlation_lower=[]
+
+        for aa in timesteps:
+            ## Get correlation between truth and emulator
+            correlation_upper.append(pearsonr(q_i_pred[0].flatten(),ds[aa,0].to_numpy().flatten())[0])
+            correlation_lower.append(pearsonr(q_i_pred[1].flatten(),ds[aa,1].to_numpy().flatten())[0])
+
+            x=torch.tensor(q_i_pred).float()
+
+            x_upper = transforms.normalise_field(x[0],self.network.config["q_mean_upper"],self.network.config["q_std_upper"])
+            x_lower = transforms.normalise_field(x[1],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
+            x_denorm = torch.stack((x_upper,x_lower),dim=0).unsqueeze(0)
+
+            x_dt=self.network(x_denorm)
+
+            ## Map back from normalised space to physical units
+            q_upper=transforms.denormalise_field(x_dt[:,0,:,:],self.network.config["q_mean_upper"],self.network.config["q_std_upper"])
+            q_lower=transforms.denormalise_field(x_dt[:,1,:,:],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
+
+            normalise=False
+            if normalise==True:
+                q_upper=q_upper-torch.mean(q_upper)
+                q_lower=q_lower-torch.mean(q_lower)
+
+            q_i_pred=(torch.cat((q_upper,q_lower))+x.squeeze()).detach().numpy().astype(np.double)
+
+        fig=plt.figure()
+        plt.title("Correlation wrt test simulation")
+        plt.plot(timesteps,correlation_upper,label="upper")
+        plt.plot(timesteps,correlation_lower,label="lower")
+        plt.xlabel("Time (hours)")
+        plt.legend()
         return fig
         
     def get_fields(self,map_index=None):
