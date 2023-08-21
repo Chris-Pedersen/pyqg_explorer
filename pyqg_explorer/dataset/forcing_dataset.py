@@ -509,8 +509,9 @@ class RolloutDataset(BaseDataset):
     def _load_and_cut_data(self,data_path,subgrid_model,subgrid_forcing=False):
         """ For a given simulation, extract the relevant snapshots. Concat into torch tensors of the appropriate shape. Concat to the self.x
         (and self.y) datasets """
+
         data_full=xr.open_dataset(data_path)
-        print(data_path)
+
         ## Make relevant cuts if we are dropping spin-up snapshots
         if self.drop_spin_up==True:
             ## Hardcode the timeslice assuming sampling freq of 1000 timesteps
@@ -525,12 +526,18 @@ class RolloutDataset(BaseDataset):
         assert self.data_increment==data_attrs["increment"] and self.data_rollout==data_attrs["rollout"], "Dataset increments/rollouts are inconsistent"
         
         ## Reshape
-        torch_q=torch.tensor(data_full.q[self.cuts].to_numpy()).view(self.num_rollouts,2,self.rollout+1,64,64)
+        torch_q=torch.tensor(data_full.q[self.cuts].to_numpy()).view(self.num_rollouts,self.rollout+1,2,64,64)
+
+        ## Swap axes to have [batch_idx,channels,layer,nx,ny]
+        torch_q=torch.swapaxes(torch_q,1,2)
+
         if subgrid_forcing:
             if subgrid_model=="None":
-                torch_s=torch.tensor(data_full.q_forcing_advection[self.cuts].to_numpy()).view(self.num_rollouts,2,self.rollout+1,64,64)
+                torch_s=torch.tensor(data_full.q_forcing_advection[self.cuts].to_numpy()).view(self.num_rollouts,self.rollout+1,2,64,64)
             else:
-                torch_s=torch.tensor(data_full.q_subgrid_forcing[self.cuts].to_numpy()).view(self.num_rollouts,2,self.rollout+1,64,64)
+                torch_s=torch.tensor(data_full.q_subgrid_forcing[self.cuts].to_numpy()).view(self.num_rollouts,self.rollout+1,2,64,64)
+            ## Swap axes to have [batch_idx,channels,layer,nx,ny]
+            torch_s=torch.swapaxes(torch_s,1,2)
             return [torch_q,torch_s]
         else:
             return [torch_q]
@@ -543,12 +550,12 @@ class RolloutDataset(BaseDataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         ## Return normalised arrays
-        q_upper=transforms.normalise_field(self.q_data[idx][0],self.q_mean_upper,self.q_std_upper)
-        q_lower=transforms.normalise_field(self.q_data[idx][1],self.q_mean_lower,self.q_std_lower)
+        q_upper=transforms.normalise_field(self.q_data[idx,0],self.q_mean_upper,self.q_std_upper)
+        q_lower=transforms.normalise_field(self.q_data[idx,1],self.q_mean_lower,self.q_std_lower)
         q_out=torch.stack((q_upper,q_lower),dim=0)
         if self.subgrid_forcing: 
-            s_upper=transforms.normalise_field(self.s_data[idx][0],self.s_mean_upper,self.s_std_upper)
-            s_lower=transforms.normalise_field(self.s_data[idx][1],self.s_mean_lower,self.s_std_lower)
+            s_upper=transforms.normalise_field(self.s_data[idx,0],self.s_mean_upper,self.s_std_upper)
+            s_lower=transforms.normalise_field(self.s_data[idx,1],self.s_mean_lower,self.s_std_lower)
             s_out=torch.stack((s_upper,s_lower),dim=0)
             return (q_out,s_out)
         else:
