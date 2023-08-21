@@ -39,9 +39,9 @@ class EmulatorPerformance():
         self.rollout=rollout
         
         if valid_loader is not None:
-            self._populate_fields
+            self._populate_fields(valid_loader,threshold)
 
-    def _populate_fields(self):
+    def _populate_fields(self,valid_loader,threshold):
         count=0
         if self.rollout==False:
             ## Cache x, true y and predicted y values that we will use to guage offline performance
@@ -100,10 +100,16 @@ class EmulatorPerformance():
         correlation_upper=[]
         correlation_lower=[]
 
+        autocorrelation_upper=[]
+        autocorrelation_lower=[]
+
         for aa in timesteps:
             ## Get correlation between truth and emulator
             correlation_upper.append(pearsonr(q_i_pred[0].flatten(),ds[aa,0].to_numpy().flatten())[0])
             correlation_lower.append(pearsonr(q_i_pred[1].flatten(),ds[aa,1].to_numpy().flatten())[0])
+
+            autocorrelation_upper.append(pearsonr(ds[aa,0].to_numpy().flatten(),ds[0,0].to_numpy().flatten())[0])
+            autocorrelation_lower.append(pearsonr(ds[aa,1].to_numpy().flatten(),ds[0,1].to_numpy().flatten())[0])
 
             x=torch.tensor(q_i_pred).float()
 
@@ -126,8 +132,10 @@ class EmulatorPerformance():
 
         fig=plt.figure()
         plt.title("Correlation wrt test simulation")
-        plt.plot(timesteps,correlation_upper,label="upper")
-        plt.plot(timesteps,correlation_lower,label="lower")
+        plt.plot(timesteps,correlation_upper,label="upper",color="blue",linestyle="solid")
+        plt.plot(timesteps,correlation_lower,label="lower",color="blue",linestyle="dashed")
+        plt.plot(timesteps,autocorrelation_upper,label="upper auto",color="black",linestyle="solid")
+        plt.plot(timesteps,autocorrelation_lower,label="lower auto",color="black",linestyle="dashed")
         plt.xlabel("Time (hours)")
         plt.legend()
         return fig
