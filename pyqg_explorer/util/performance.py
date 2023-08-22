@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
@@ -682,10 +683,10 @@ def load_ensembles(ensemble_path):
     """ Loop over ensemble members and alphas to build a grid of kinetic energy over time. Assumes we have
     50 simulations in each ensemble, and alphas range from [1,5,10,15] """
     
-    grid_ke=np.zeros((4,50,173))
-    spectral_energy=np.zeros((4,50,23))
+    grid_ke=np.zeros((4,25,173))
+    spectral_energy=np.zeros((4,25,23))
     for aa,alpha in enumerate([1,5,10,15]):
-        for bb in range(50):
+        for bb in range(25):
             data=xr.open_dataset(ensemble_path+"/alpha_"+str(alpha)+"_run_"+str(bb+1)+".nc")
             grid_ke[aa][bb]=get_ke_time(data)
             spectral_energy[aa][bb]=data.ispec_energy_transfer.data
