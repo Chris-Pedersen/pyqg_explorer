@@ -43,18 +43,17 @@ def run_forcing_simulations(m1, m2, increment, rollout=1, sampling_freq=1000, sa
     snapshots = []
 
     while m1.t < m1.tmax:
-        if sampling_dist == 'exponential':
-            # If we're sampling irregularly, check if we've hit the next
-            # interval
-            should_sample = m1.tc >= next_sample
-            if should_sample:
-                next_sample = m1.tc + int(np.random.exponential(sampling_freq))
-        elif increment == 0:
+        if increment == 0:
             ## If increment == 0, just sample at each sampling freq
             should_sample = (m1.tc % sampling_freq == 0)
         else:
             ## If sampling at increments, identify indices to sample at
             should_sample = (m1.tc % sampling_freq == 0) or ((m1.tc % sampling_freq % increment == 0) and m1.tc % sampling_freq <= rollout*increment)
+            
+        ## Don't sample from t=0 (we have no subgrid forcing for very first snapshot)
+        if m1.tc<500:
+            should_sample=False
+
 
         if should_sample:
             # Update the PV of the low-resolution model to match the downscaled
