@@ -486,7 +486,7 @@ class RolloutDataset(BaseDataset):
         self.num_rollouts=int(len(data.time)/(self.data_rollout+1))
         cuts=np.array([],dtype=int)
         for aa in range(self.num_rollouts):
-            cuts=np.append(cuts,aa*self.data_rollout+np.arange(0,int((self.increment/self.data_increment)*self.rollout+1),int(self.increment/self.data_increment)))
+            cuts=np.append(cuts,aa*(self.data_rollout+1)+np.arange(0,int((self.increment/self.data_increment)*self.rollout+1),int(self.increment/self.data_increment)))
         self.cuts=cuts
         return
     
