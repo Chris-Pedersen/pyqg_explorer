@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 from itertools import *
 
+""" Unet-style architecture taken from Adam Subel """
+
 def pairwise(iterable):
     # pairwise('ABCDEFG') --> AB BC CD DE EF FG
     a, b = tee(iterable)
