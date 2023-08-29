@@ -1,7 +1,12 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import os
+import pickle
+import copy
 from itertools import *
+import pyqg_explorer.util.transforms as transforms
+
 
 """ Unet-style architecture taken from Adam Subel """
 
@@ -34,29 +39,27 @@ class Conv_block(torch.nn.Module):
         return fts
     
 class U_net(torch.nn.Module):
-    def __init__(self,ch_width,n_out,config,kernel_size = 3):
+    def __init__(self,config,kernel_size = 3):
         super().__init__()
-        self.N_in = ch_width[0]
-        self.N_out = ch_width[-1]
         self.config = config
+        self.ch_width = copy.deepcopy(config["ch_width"])
+        
         # going down
         layers = []
-        for a,b in pairwise(ch_width):
+        for a,b in pairwise(self.ch_width):
             layers.append(Conv_block(a,b))
             layers.append(nn.MaxPool2d(2))
         layers.append(Conv_block(b,b))    
         layers.append(nn.Upsample(scale_factor=2, mode='bilinear'))
-        ch_width.reverse()
-        for a,b in pairwise(ch_width[:-1]):
+        self.ch_width.reverse()
+        for a,b in pairwise(self.ch_width[:-1]):
             layers.append(Conv_block(a,b))
             layers.append(nn.Upsample(scale_factor=2, mode='bilinear'))
         layers.append(Conv_block(b,b))    
-        layers.append(torch.nn.Conv2d(b,n_out,kernel_size,padding='same'))
+        layers.append(torch.nn.Conv2d(b,self.config["output_channels"],kernel_size,padding='same'))
         
         self.layers = nn.ModuleList(layers)
-        self.num_steps = int(len(ch_width)-1)
-        
-        #self.layers = nn.ModuleList(layer)
+        self.num_steps = int(len(self.ch_width)-1)
 
     def forward(self,fts):
         temp = []
