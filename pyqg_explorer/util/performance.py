@@ -74,6 +74,69 @@ class EmulatorPerformance():
         self.r2_upper=r2_score(self.y_true[:,0,:,:].flatten(),self.y_pred[:,0,:,:].flatten())
         self.r2_lower=r2_score(self.y_true[:,1,:,:].flatten(),self.y_pred[:,1,:,:].flatten())
         
+    def _get_next_step(self,q_i):
+        """ For a given field at time i, use the attributed model to push the system forward
+            to time i+dt (dt is stored as the time horizon in model config) """
+
+        x=torch.tensor(q_i).float()
+        ## Map from physical to normalised space using the factors used to train the network
+        ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
+        x_upper = transforms.normalise_field(x[0],self.network.config["q_mean_upper"],self.network.config["q_std_upper"])
+        x_lower = transforms.normalise_field(x[1],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
+        x = torch.stack((x_upper,x_lower),dim=0).unsqueeze(0)
+
+        x=self.network(x)
+
+        ## Map back from normalised space to physical units
+        q_upper=transforms.denormalise_field(x[:,0,:,:],self.network.config["q_mean_upper"],self.network.config["q_std_upper"])
+        q_lower=transforms.denormalise_field(x[:,1,:,:],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
+
+        ## Set zero mean
+        q_upper=q_upper-torch.mean(q_upper)
+        q_lower=q_lower-torch.mean(q_lower)
+
+        ## Reshape to match pyqg dimensions, and cast to numpy array
+        q_i_dt=torch.cat((q_upper,q_lower)).detach().numpy().astype(np.double)
+        return q_i_dt+q_i
+    
+    def get_short_MSEs(self):
+        ds_load="/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/lowres100_0.nc"
+        ds=xr.load_dataset(ds_load)
+        q_i=ds.q[0].to_numpy()
+        times=np.arange(self.network.config["time_horizon"],len(ds.q),self.network.config["time_horizon"])
+
+        mses=np.empty((25,len(times)))
+        mses_0=np.empty((25,len(times)))
+
+        criterion=nn.MSELoss()
+
+        for aa in range(25):
+            ds_load="/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/lowres100_%d.nc" % aa
+            ds=xr.load_dataset(ds_load)
+            q_i=ds.q[0].to_numpy()
+            ## Index counter for loss arrays
+            cc=0
+            for bb in range(self.network.config["time_horizon"],len(ds.q),self.network.config["time_horizon"]):
+                q_i_dt=self._get_next_step(q_i)
+                mses[aa][cc]=(criterion(torch.tensor(ds.q[bb].to_numpy()),torch.tensor(q_i_dt)).numpy())
+                mses_0[aa][cc]=(criterion(torch.tensor(ds.q[bb].to_numpy()),torch.tensor(ds.q[0].to_numpy())))
+                q_i=q_i_dt
+                cc+=1
+
+        fig=plt.figure()        
+        plt.title("MSE(truth,emulator), averaged over 25 simulations")
+        plt.plot(times,np.mean(mses,axis=0),color="blue",label="Emulator MSE wrt truth")
+        plt.fill_between(times,np.mean(mses,axis=0)+np.std(mses,axis=0),np.mean(mses,axis=0)-np.std(mses,axis=0),color="blue",alpha=0.2)
+
+        plt.plot(times,np.mean(mses_0,axis=0),color="red",label="True MSE wrt t=0")
+        plt.fill_between(times,np.mean(mses_0,axis=0)+np.std(mses_0,axis=0),np.mean(mses_0,axis=0)-np.std(mses_0,axis=0),color="red",alpha=0.2)
+        plt.yscale("log")
+        plt.xlabel("timestep")
+        plt.ylabel("MSE")
+        plt.legend()
+        return fig
+
+        
     def get_distribution_2d(self):
         """ Plot histograms of the true and predicted subgrid forcing """
         fig, axs = plt.subplots(1, 2,figsize=(11,4))
