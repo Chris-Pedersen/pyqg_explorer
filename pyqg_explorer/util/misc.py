@@ -3,6 +3,7 @@ import io
 import torch
 import pickle
 import pyqg_explorer.models.fcnn as fcnn
+import pyqg_explorer.models.unet as unet
 import xarray as xr
 
 """ Store some miscellaneous helper methods that are frequently used """
@@ -26,9 +27,17 @@ def load_model(file_string):
             model_dict = pickle.load(fp)
         else:
             model_dict = CPU_Unpickler(fp).load()
-    ## Hardcoded to only work with FCNN for now. The loading of state_dict
-    ## should flag errors if we accidentally try and load something else though
-    model=fcnn.FCNN(model_dict["config"])
+
+    ## Check if unet, otherwise assume FCNN
+    try:
+        if model_dict["config"]["arch"]=="unet":
+            model=unet.U_net(model_dict["config"])
+        else:
+            model=fcnn.FCNN(model_dict["config"])
+    except:
+        model=fcnn.FCNN(model_dict["config"])
+
+    ## Load state_dict
     model.load_state_dict(model_dict["state_dict"])
     return model
 
