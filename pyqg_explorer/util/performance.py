@@ -57,12 +57,21 @@ class EmulatorPerformance():
                     break
         else:
             ## Cache x, true y and predicted y values that we will use to guage offline performance
+            forcing=False
             for data in valid_loader:
                 x=data
+                if len(x)==2:
+                    forcing=True
+                    s=x[1]
+                    x=x[0]
+                print(x.shape)
                 count+=x.shape[0]
                 self.x_np.append(x[:,:,0,:,:])
                 self.y_true.append(x[:,:,1,:,:])
-                self.y_pred.append(self.network(x[:,:,0,:,:])+x[:,:,0,:,:]) ## y pred should now be the same quantity, q_i+dt
+                if forcing==True:
+                    self.y_pred.append(self.network(torch.cat((x[:,:,0,:,:],s[:,:,0,:,:]),1)))
+                else:
+                    self.y_pred.append(self.network(x[:,:,0,:,:])+x[:,0:2,0,:,:]) ## y pred should now be the same quantity, q_i+dt
                 if count>threshold:
                     break
             
@@ -99,7 +108,7 @@ class EmulatorPerformance():
         q_i_dt=torch.cat((q_upper,q_lower)).detach().numpy().astype(np.double)
         return q_i_dt+q_i
     
-    def get_short_MSEs(self):
+    def get_short_MSEs(self,return_data=False):
         ds_load="/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/lowres100_0.nc"
         ds=xr.load_dataset(ds_load)
         q_i=ds.q[0].to_numpy()
@@ -134,7 +143,11 @@ class EmulatorPerformance():
         plt.xlabel("timestep")
         plt.ylabel("MSE")
         plt.legend()
-        return fig
+        if return_data:
+            plot_data=[times,mses,mses_0]
+            return fig,plot_data
+        else:
+            return fig
 
         
     def get_distribution_2d(self):
