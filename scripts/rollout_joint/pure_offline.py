@@ -46,12 +46,14 @@ wandb.init(project="joint_rollout", entity="m2lines",config=config,dir="/scratch
 wandb.config["save_path"]=wandb.run.dir
 config["save_path"]=wandb.run.dir
 config["wandb_url"]=wandb.run.get_url()
-## Add number of parameters of model to config
-wandb.config["theta learnable parameters"]=sum(p.numel() for p in model.parameters())
-wandb.watch(model, log_freq=1)
 
 ## Define CNN module
 model=fcnn.FCNN(config)
+
+
+## Add number of parameters of model to config
+wandb.config["theta learnable parameters"]=sum(p.numel() for p in model.parameters())
+wandb.watch(model, log_freq=1)
 
 ## Loss function defined in a RegressionSystem module
 system=reg_sys.RegressionSystem(model,config)
