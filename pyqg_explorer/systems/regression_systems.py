@@ -204,7 +204,7 @@ class ResidualRollout(BaseRegSytem):
         return loss
 
 
-class JointRollout(reg_sys.BaseRegSytem):
+class JointRollout(BaseRegSytem):
     """ Regression system to train a jointly optimised subgrid model, over multiple time rollouts """
     def __init__(self,network,config:dict,network_beta):
         super().__init__(network,config)
@@ -236,4 +236,3 @@ class JointRollout(reg_sys.BaseRegSytem):
             
         self.log(f"{kind}_loss", loss, on_step=False, on_epoch=True) 
         return loss
-        
