@@ -204,7 +204,7 @@ class ResidualRollout(BaseRegSytem):
         return loss
 
 
-class JointRollout(BaseRegSytem):
+class JointRollout(reg_sys.BaseRegSytem):
     """ Regression system to train a jointly optimised subgrid model, over multiple time rollouts """
     def __init__(self,network,config:dict,network_beta):
         super().__init__(network,config)
@@ -219,6 +219,7 @@ class JointRollout(BaseRegSytem):
         loss=0
         
         for aa in range(0,x_data.shape[2]-1):
+            print(aa)
             if aa==0:
                 x_t=x_data[:,:,0,:,:]
             else:
@@ -227,10 +228,12 @@ class JointRollout(BaseRegSytem):
             x_dt=self.network_beta(torch.cat((x_t,output_theta),1))
             loss_theta_dt=self.config["theta_loss"]*self.criterion(output_theta,y_data[:,:,aa,:,:])*np.exp(-aa*self.config["decay_coeff"])
             loss_beta_dt=self.config["beta_loss"]*self.criterion(x_dt,x_data[:,:,aa+1,:,:]-x_data[:,:,aa,:,:])*np.exp(-aa*self.config["decay_coeff"])
+            loss_dt=loss_theta_dt+loss_beta_dt
+            loss+=loss_dt
             self.log(f"{kind}_theta_loss_%d" % aa, loss_theta_dt, on_step=False, on_epoch=True)
             self.log(f"{kind}_beta_loss_%d" % aa, loss_beta_dt, on_step=False, on_epoch=True)
             self.log(f"{kind}_loss_%d", loss_dt, on_step=False, on_epoch=True)
-            loss+=(loss_theta_dt+loss_beta_dt)
             
         self.log(f"{kind}_loss", loss, on_step=False, on_epoch=True) 
         return loss
+        
