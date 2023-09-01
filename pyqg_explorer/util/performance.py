@@ -308,11 +308,14 @@ class ParameterizationPerformance():
             x=data[0]
             y=data[1]
             count+=x.shape[0]
+            ## Check if we are using a pure offline dataset, or emulator forcing dataset
+            ## For emulator forcing, the subgrid forcing fields will be in the x[:,2:4] channels
             if x.shape[1]>2:
                 self.x_np.append(x[:,0:2,:])   
                 self.y_true.append(x[:,2:4,:]) 
                 self.y_pred.append(self.network(x[:,0:2,:]))
             else:
+                ## For pure offline forcing dataset, the subgrid forcing field will be in the y dataset
                 self.x_np.append(x)
                 self.y_true.append(y)
                 self.y_pred.append(self.network(x))
