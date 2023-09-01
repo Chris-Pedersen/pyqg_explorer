@@ -150,12 +150,12 @@ class ResidualRegressionSystemStd(BaseRegSytem):
 
 
 class ResidualRollout(BaseRegSytem):
-    """ Define loss with respect to the residuals. Expect y_data *not* to be
-    a residual value, but calculate residuals in the loss """
+    """ Train an emulator to predict residuals over some time horizon. Can either train to use
+        just the resolved field, or resolved field + subgrid forcing field as input channels """
     def __init__(self,network,config:dict):
         super().__init__(network,config)
-
-    def step(self,batch,kind):
+        
+    def step_noforce(self,batch,kind):
         """ Evaluate loss function """
         x_data = batch
         
@@ -170,6 +170,67 @@ class ResidualRollout(BaseRegSytem):
             loss_dt=self.criterion(x_dt,x_data[:,:,aa+1,:,:]-x_data[:,:,aa,:,:])*np.exp(-aa*self.config["decay_coeff"])
             self.log(f"{kind}_loss_%d" % aa, loss_dt, on_step=False, on_epoch=True)
             loss+=loss_dt
+            
+        self.log(f"{kind}_loss", loss, on_step=False, on_epoch=True) 
+        return loss
+    
+    def step_force(self,batch,kind):
+        """ Evaluate loss function """
+        x_data,s_data = batch
+        
+        loss=0
+        
+        for aa in range(0,x_data.shape[2]-1):
+            if aa==0:
+                x_t=torch.cat((x_data[:,:,0,:,:],s_data[:,:,0,:,:]),1)
+            else:
+                x_t=x_dt+x_t[:,0:2,:,:]
+                x_t=torch.cat((x_t,s_data[:,:,aa,:,:]),1)
+            #print(x_t.shape)
+            x_dt=self(x_t)
+            loss_dt=self.criterion(x_dt,x_data[:,:,aa+1,:,:]-x_data[:,:,aa,:,:])*np.exp(-aa*self.config["decay_coeff"])
+            self.log(f"{kind}_loss_%d" % aa, loss_dt, on_step=False, on_epoch=True)
+            loss+=loss_dt
+            
+        self.log(f"{kind}_loss", loss, on_step=False, on_epoch=True) 
+        return loss
+    
+    def step(self,batch,kind):
+        """ Evaluate loss function """
+        if self.config["subgrid_forcing"]==True:
+            loss=self.step_force(batch,kind)
+        else:
+            loss=self.step_noforce(batch,kind)
+        return loss
+
+
+class JointRollout(BaseRegSytem):
+    """ Regression system to train a jointly optimised subgrid model, over multiple time rollouts """
+    def __init__(self,network,config:dict,network_beta):
+        super().__init__(network,config)
+        self.network_beta=network_beta
+        
+        assert self.network_beta.config["time_horizon"]==self.config["time_horizon"], "Different time horizons for dataset and beta network"
+
+    def step(self,batch,kind):
+        """ Evaluate loss function """
+        x_data,y_data = batch
+        
+        loss=0
+        
+        for aa in range(0,x_data.shape[2]-1):
+            if aa==0:
+                x_t=x_data[:,:,0,:,:]
+            else:
+                x_t=x_dt+x_t
+            output_theta = self(x_t)
+            x_dt=self.network_beta(torch.cat((x_t,output_theta),1))
+            loss_theta_dt=self.config["theta_loss"]*self.criterion(output_theta,y_data[:,:,aa,:,:])*np.exp(-aa*self.config["decay_coeff"])
+            loss_beta_dt=self.config["beta_loss"]*self.criterion(x_dt,x_data[:,:,aa+1,:,:]-x_data[:,:,aa,:,:])*np.exp(-aa*self.config["decay_coeff"])
+            self.log(f"{kind}_theta_loss_%d" % aa, loss_theta_dt, on_step=False, on_epoch=True)
+            self.log(f"{kind}_beta_loss_%d" % aa, loss_beta_dt, on_step=False, on_epoch=True)
+            self.log(f"{kind}_loss_%d", loss_dt, on_step=False, on_epoch=True)
+            loss+=(loss_theta_dt+loss_beta_dt)
             
         self.log(f"{kind}_loss", loss, on_step=False, on_epoch=True) 
         return loss
