@@ -6,8 +6,9 @@
 #SBATCH --mem=24GB
 #SBATCH --output=/scratch/cp3759/pyqg_data/sims/KE_accumulation/slurm_files/KE_sim_%A_%a.out
 #SBATCH --error=/scratch/cp3759/pyqg_data/sims/KE_accumulation/slurm_files/KE_sim_%A_%a.err
-#SBATCH --array=1-50
+#SBATCH --array=1-10
 
+source ~/.bashrc
 module purge
 
 ## Parse variable arguments from command line
