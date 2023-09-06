@@ -87,7 +87,7 @@ class JointRegressionSystem(BaseRegSytem):
         output_theta = self(x_data[:,0:2,:,:]) ## Takes in Q, outputs \hat{S}
         output_beta = self.network_beta(torch.cat((x_data[:,0:2,:,:],output_theta),1))
         loss_theta = self.config["theta_loss"]*self.criterion(output_theta, x_data[:,2:4,:,:])
-        loss_beta = self.config["beta_loss"]*self.criterion(output_beta, y_data)
+        loss_beta = self.config["beta_loss"]*self.criterion(output_beta, y_data-x_data[:,0:2,:,:])
         loss = loss_theta+loss_beta
         self.log(f"{kind}_theta_loss", loss_theta, on_step=False, on_epoch=True)
         self.log(f"{kind}_beta_loss", loss_beta, on_step=False, on_epoch=True)
@@ -219,7 +219,6 @@ class JointRollout(BaseRegSytem):
         loss=0
         
         for aa in range(0,x_data.shape[2]-1):
-            print(aa)
             if aa==0:
                 x_t=x_data[:,:,0,:,:]
             else:
