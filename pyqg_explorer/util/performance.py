@@ -60,6 +60,7 @@ class EmulatorPerformance():
                 if count>threshold:
                     break
         else:
+            assert self.residual==True, "Only implemented for residual emulators"
             ## Cache x, true y and predicted y values that we will use to guage offline performance
             forcing=False
             for data in valid_loader:
@@ -73,7 +74,7 @@ class EmulatorPerformance():
                 self.x_np.append(x[:,:,0,:,:])
                 self.y_true.append(x[:,:,1,:,:])
                 if forcing==True:
-                    self.y_pred.append(self.network(torch.cat((x[:,:,0,:,:],s[:,:,0,:,:]),1)))
+                    self.y_pred.append(self.network(torch.cat((x[:,:,0,:,:],s[:,:,0,:,:]),1))+x[:,0:2,0,:,:])
                 else:
                     self.y_pred.append(self.network(x[:,:,0,:,:])+x[:,0:2,0,:,:]) ## y pred should now be the same quantity, q_i+dt
                 if count>threshold:
