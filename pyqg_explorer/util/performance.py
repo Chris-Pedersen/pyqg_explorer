@@ -20,7 +20,7 @@ import cmocean
 
 class EmulatorPerformance():
     """ Object to store performance tests relevant to neural emulators """
-    def __init__(self,network,valid_loader,threshold,rollout=False):
+    def __init__(self,network,valid_loader,threshold,rollout=False,residual=True):
         """ network:  Torch model we want to test. Assuming this is a model for the subgrid forcing
             valid_loader: torch dataloader with the validation set
                           NB we are assuming this is an EmulatorForcingDataset, where the
@@ -38,6 +38,7 @@ class EmulatorPerformance():
         self.y_true=[] ## Let's store the i+1 field
         self.y_pred=[] ## for both true and predicted
         self.rollout=rollout
+        self.residual=residual ## Property of the CNN, but not yet stored in config dict, so we have to set this manually for now
         
         if valid_loader is not None:
             self._populate_fields(valid_loader,threshold)
@@ -52,7 +53,10 @@ class EmulatorPerformance():
                 count+=x.shape[0]
                 self.x_np.append(x)
                 self.y_true.append(y)
-                self.y_pred.append(self.network(x)+x[:,0:2,:,:]) ## y pred should now be the same quantity, q_i+dt
+                if self.residual==True:
+                    self.y_pred.append(self.network(x)+x[:,0:2,:,:]) ## y pred should now be the same quantity, q_i+dt
+                else:
+                    self.y_pred.append(self.network(x)) ## Predicting state, not residual
                 if count>threshold:
                     break
         else:
