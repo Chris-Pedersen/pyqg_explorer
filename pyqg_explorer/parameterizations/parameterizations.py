@@ -102,6 +102,76 @@ class ZannaBolton2020Q(pyqg.parameterizations.QParameterization):
         return f"ZannaBolton2020(κ={self.constant:.2e})"
 
 
+class Smagorinsky(pyqg.parameterizations.QParameterization):
+    r"""Velocity parameterization from `Smagorinsky 1963`_.
+
+    This parameterization assumes that due to subgrid stress, there is an
+    effective eddy viscosity
+
+    .. math:: \nu = (C_S \Delta)^2 \sqrt{2(S_{x,x}^2 + S_{y,y}^2 + 2S_{x,y}^2)}
+
+    which leads to updated velocity tendencies :math:`\Pi_{i}, i \in \{1,2\}`
+    corresponding to :math:`x` and :math:`y` respectively (equation is the same
+    in each layer):
+
+    .. math:: \Pi_{i} = 2 \partial_i(\nu S_{i,i}) + \partial_{2-i}(\nu S_{i,2-i})
+
+    where :math:`C_S` is a tunable Smagorinsky constant, :math:`\Delta` is the
+    grid spacing, and
+
+    .. math:: S_{i,j} = \frac{1}{2}(\partial_i \mathbf{u}_j
+                                  + \partial_j \mathbf{u}_i)
+
+    .. _Smagorinsky 1963: https://doi.org/10.1175/1520-0493(1963)091%3C0099:GCEWTP%3E2.3.CO;2
+
+    Modified the implementation in pyqg/parameterizations.py to output
+    Q subgrid forcing as opposed to velocities.
+
+    """
+
+    def __init__(self, constant=0.1):
+        r"""
+        Parameters
+        ----------
+        constant : number
+            Smagorinsky constant :math:`C_S`. Defaults to 0.1.
+        """
+
+        self.constant = constant
+
+    def __call__(self, m, just_viscosity=False):
+        r"""
+        Parameters
+        ----------
+        m : Model
+            The model for which we are evaluating the parameterization.
+        just_viscosity : bool
+            Whether to just return the eddy viscosity (e.g. for use in a
+            different parameterization which assumes a Smagorinsky dissipation
+            model). Defaults to false.
+        """
+        uh = m.fft(m.u)
+        vh = m.fft(m.v)
+        Sxx = m.ifft(uh * m.ik)
+        Syy = m.ifft(vh * m.il)
+        Sxy = 0.5 * m.ifft(uh * m.il + vh * m.ik)
+        nu = (self.constant * m.dx)**2 * np.sqrt(2 * (Sxx**2 + Syy**2 + 2 * Sxy**2))
+        if just_viscosity:
+            return nu
+        nu_Sxxh = m.fft(nu * Sxx)
+        nu_Sxyh = m.fft(nu * Sxy)
+        nu_Syyh = m.fft(nu * Syy)
+        du = 2 * (m.ifft(nu_Sxxh * m.ik) + m.ifft(nu_Sxyh * m.il))
+        dv = 2 * (m.ifft(nu_Sxyh * m.ik) + m.ifft(nu_Syyh * m.il))
+        ## Take curl to convert to potential vorticity forcing
+        dq = -m.ifft(m.l*1j*m.fft(du))+m.ifft(m.k*1j*m.fft(dv))
+        if self.cache_forcing:
+            self.cached_forcing=dq
+        return dq
+
+    def __repr__(self):
+        return f"Smagorinsky(Cs={self.constant})"
+
 class BackscatterBiharmonic(pyqg.parameterizations.QParameterization):
     r"""PV parameterization based on `Jansen and Held 2014`_ and
     `Jansen et al.  2015`_ (adapted by Pavel Perezhogin). Assumes that a
