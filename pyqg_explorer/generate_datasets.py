@@ -111,11 +111,13 @@ def add_ispecs(d_cat,snapshots,m):
     ## Take depth-averaged quantity
     avegd=ave_lev(snapshots[-1],m.delta)
     ispec_k_avegd,ispec_KEspec_avegd=calc_ispec(m, avegd.KEspec.squeeze())
+    ispec_k_avegd,ispec_Ensspec_avegd=calc_ispec(m, avegd.Ensspec.squeeze())
 
     ## Isotropically averaged spectra to the dataset
     d_cat=d_cat.assign_coords(coords={"ispec_k":ispec_k})
     d_cat["ispec_energy_transfer"]=xr.DataArray(ispec_energy_transfer,dims="ispec_k")
     d_cat["ispec_KEspec_avegd"]=xr.DataArray(ispec_KEspec_avegd,dims="ispec_k")
+    d_cat["ispec_Ensspec_avegd"]=xr.DataArray(ispec_Ensspec_avegd,dims="ispec_k")
 
     return d_cat
 
