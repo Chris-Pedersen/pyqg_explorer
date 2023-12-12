@@ -110,14 +110,17 @@ def add_ispecs(d_cat,snapshots,m):
 
     ## Take depth-averaged quantity
     avegd=ave_lev(snapshots[-1],m.delta)
-    ispec_k_avegd,ispec_KEspec_avegd=calc_ispec(m, avegd.KEspec.squeeze())
-    ispec_k_avegd,ispec_Ensspec_avegd=calc_ispec(m, avegd.Ensspec.squeeze())
+    ispec_k,ispec_KEspec_u=calc_ispec(m, d_cat.KEspec[-1][0])
+    ispec_k,ispec_KEspec_l=calc_ispec(m, d_cat.KEspec[-1][1])
+    ispec_k,ispec_Ensspec_u=calc_ispec(m, d_cat.Ensspec[-1][0])
+    ispec_k,ispec_Ensspec_l=calc_ispec(m, d_cat.Ensspec[-1][1])
 
+    print(ispec_k.shape)
     ## Isotropically averaged spectra to the dataset
     d_cat=d_cat.assign_coords(coords={"ispec_k":ispec_k})
     d_cat["ispec_energy_transfer"]=xr.DataArray(ispec_energy_transfer,dims="ispec_k")
-    d_cat["ispec_KEspec_avegd"]=xr.DataArray(ispec_KEspec_avegd,dims="ispec_k")
-    d_cat["ispec_Ensspec_avegd"]=xr.DataArray(ispec_Ensspec_avegd,dims="ispec_k")
+    d_cat["ispec_KEspec"]=xr.DataArray(np.stack((ispec_KEspec_u,ispec_KEspec_l)),dims=["lev","ispec_k"])
+    d_cat["ispec_Ensspec"]=xr.DataArray(np.stack((ispec_Ensspec_u,ispec_Ensspec_l)),dims=["lev","ispec_k"])
 
     return d_cat
 
