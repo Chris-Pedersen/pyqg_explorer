@@ -7,7 +7,6 @@ import pyqg_explorer.util.transforms as transforms
 from torch.utils.data import Dataset
 
 
-
 class BaseDataset(Dataset):
     """ Base object to store core dataset methods """
     def __init__(self,seed=42,subsample=None,drop_spin_up=True,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
@@ -100,7 +99,6 @@ class ResidualDataset(BaseDataset):
         self.res_mean_upper,self.res_mean_lower=self.y_data.mean(dim=[0,2,3])
         self.res_std_upper,self.res_std_lower=self.y_data.std(dim=[0,2,3])
         
-        
     def __len__(self):
         return self.len
     
@@ -147,7 +145,11 @@ class OfflineDataset(BaseDataset):
             channel_index=1
             return torch.cat([collapse_and_reshape(xarray) for xarray in xarray_subdata], channel_index)
         
-        all_data=concat_arrays([data_full.q,data_full.q_forcing_advection])
+        if list(data_full.attrs.keys())[0][0:5]=="torch":
+            all_data=concat_arrays([data_full.q,data_full.S])
+            all_data=torch.tensor(all_data,dtype=torch.float32)
+        else:
+            all_data=concat_arrays([data_full.q,data_full.q_forcing_advection])
         self.x_data=all_data[:,0:2]
         self.y_data=all_data[:,2:4]
         
