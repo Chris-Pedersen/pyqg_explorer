@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from pytorch_lightning import LightningModule
-from pytorch_lightning.loops import FitLoop
+#from pytorch_lightning.loops import FitLoop
 import pyqg_explorer.util.transforms as transforms
 
 
