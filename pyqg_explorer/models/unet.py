@@ -135,24 +135,27 @@ class Unet(nn.Module):
     '''
     simple unet design without attention
     '''
-    def __init__(self,timesteps,time_embedding_dim,in_channels=3,out_channels=2,base_dim=32,dim_mults=[2,4,8,16]):
+    def __init__(self,config):
         super().__init__()
-        assert isinstance(dim_mults,(list,tuple))
-        assert base_dim%2==0
-        self.model_type="Unet"
 
-        channels=self._cal_channels(base_dim,dim_mults)
+        self.config=config
 
-        self.init_conv=ConvBnSiLu(in_channels,base_dim,3,1,1)
-        self.time_embedding=nn.Embedding(timesteps,time_embedding_dim)
+        assert isinstance(self.config["dim_mults"],(list,tuple))
+        assert self.config["base_dim"]%2==0
+        self.config["model_type"]="Unet"
 
-        self.encoder_blocks=nn.ModuleList([EncoderBlock(c[0],c[1],time_embedding_dim) for c in channels])
-        self.decoder_blocks=nn.ModuleList([DecoderBlock(c[1],c[0],time_embedding_dim) for c in channels[::-1]])
+        channels=self._cal_channels(self.config["base_dim"],self.config["dim_mults"])
+
+        self.init_conv=ConvBnSiLu(self.config["input_channels"],self.config["base_dim"],3,1,1)
+        self.time_embedding=nn.Embedding(self.config["timesteps"],self.config["time_embedding_dim"])
+
+        self.encoder_blocks=nn.ModuleList([EncoderBlock(c[0],c[1],self.config["time_embedding_dim"]) for c in channels])
+        self.decoder_blocks=nn.ModuleList([DecoderBlock(c[1],c[0],self.config["time_embedding_dim"]) for c in channels[::-1]])
     
         self.mid_block=nn.Sequential(*[ResidualBottleneck(channels[-1][1],channels[-1][1]) for i in range(2)],
                                         ResidualBottleneck(channels[-1][1],channels[-1][1]//2))
 
-        self.final_conv=nn.Conv2d(in_channels=channels[0][0]//2,out_channels=out_channels,kernel_size=1)
+        self.final_conv=nn.Conv2d(in_channels=channels[0][0]//2,out_channels=self.config["output_channels"],kernel_size=1)
 
     def forward(self,x,t=None):
         x=self.init_conv(x)
