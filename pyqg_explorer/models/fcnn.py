@@ -1,10 +1,124 @@
-
 import torch
 import torch.nn as nn
 import numpy as np
 import pyqg_explorer.util.transforms as transforms
 import os
 import pickle
+
+class TimeMLP(nn.Module):
+    '''
+    MLP to proocess time embeddings at each conv layer of diffusion process
+    '''
+    def __init__(self,embedding_dim,hidden_dim,out_dim):
+        super().__init__()
+        self.mlp=nn.Sequential(nn.Linear(embedding_dim,hidden_dim),
+                                nn.SiLU(),
+                               nn.Linear(hidden_dim,out_dim))
+        self.act=nn.SiLU()
+    def forward(self,x,t):
+        t_emb=self.mlp(t).unsqueeze(-1).unsqueeze(-1)
+        x=x+t_emb
+  
+        return self.act(x)
+
+class ConvBlock(nn.Module):
+    def __init__(self,in_channels,out_channels,kernel_size,time_embedding_dim,final_layer=False):
+        """ Conv block including time embeddings
+            Each block consists of two convolutional layers before non-linearity """
+        super().__init__()
+        self.in_channels=in_channels
+        self.out_channels=out_channels
+        self.kernel_size=kernel_size
+        self.time_embedding_dim=time_embedding_dim
+        self.final_layer=final_layer
+        self.conv0=nn.Sequential(nn.Conv2d(self.in_channels,self.out_channels,self.kernel_size,
+                                padding="same", padding_mode="circular"),nn.BatchNorm2d(self.out_channels),
+                                nn.Conv2d(self.out_channels,self.out_channels,self.kernel_size,
+                                padding="same", padding_mode="circular"),nn.BatchNorm2d(self.out_channels),
+                                nn.SiLU())
+        self.time_mlp=TimeMLP(self.time_embedding_dim,self.out_channels,self.out_channels)
+        self.conv1=nn.Sequential(nn.Conv2d(self.out_channels,self.out_channels,self.kernel_size,
+                                padding="same", padding_mode="circular"),nn.BatchNorm2d(self.out_channels),
+                                nn.Conv2d(self.out_channels,self.out_channels,self.kernel_size,
+                                padding="same", padding_mode="circular"))
+        if self.final_layer==False:
+            self.conv1.append(nn.BatchNorm2d(self.out_channels))
+            self.conv1.append(nn.SiLU())
+        
+    def forward(self,x,t):
+        x=self.conv0(x)
+        if self.final_layer==False:
+            x=self.time_mlp(x,t)
+        x=self.conv1(x)
+        return x
+
+class ConvBlockS(nn.Module):
+    def __init__(self,in_channels,out_channels,kernel_size,time_embedding_dim,final_layer=False):
+        """ Conv block including time embeddings 
+            Each block consists of a single convolutional layers before non-linearity """
+        super().__init__()
+        self.in_channels=in_channels
+        self.out_channels=out_channels
+        self.kernel_size=kernel_size
+        self.time_embedding_dim=time_embedding_dim
+        self.final_layer=final_layer
+        self.conv0=nn.Sequential(nn.Conv2d(self.in_channels,self.out_channels,self.kernel_size,
+                                padding="same", padding_mode="circular"),nn.BatchNorm2d(self.out_channels),
+                                nn.SiLU())
+        self.time_mlp=TimeMLP(self.time_embedding_dim,self.out_channels,self.out_channels)
+        self.conv1=nn.Sequential(nn.Conv2d(self.out_channels,self.out_channels,self.kernel_size,
+                                padding="same", padding_mode="circular"))
+        if self.final_layer==False:
+            self.conv1.append(nn.BatchNorm2d(self.out_channels))
+            self.conv1.append(nn.SiLU())
+        
+    def forward(self,x,t):
+        x=self.conv0(x)
+        if self.final_layer==False:
+            x=self.time_mlp(x,t)
+        x=self.conv1(x)
+        return x
+
+class FCNNT(nn.Module):
+    def __init__(self,config):
+        '''
+        CNN with time embeddings, used in diffusion model
+        Packs sequence of n_conv=config["conv_layers"] convolutional layers in a list.
+        First layer has config["input_channels"] input channels, and last layer has
+        config["output_channels"] output channels
+        
+        timesteps: number of timesteps
+        time_embedding_dim: size of time embedding
+        '''
+        super().__init__()
+        self.config=config
+        self.time_embedding=nn.Embedding(self.config["timesteps"],self.config["time_embedding_dim"])
+        self.model_type="FCNN"
+
+        blocks = []
+        ## If the conv_layers key is missing, we are running
+        ## with an 8 layer CNN
+        if ("conv_layer" in self.config) == False:
+            self.config["conv_layers"]=8
+
+        self.conv=nn.ModuleList([ConvBlock(self.config["input_channels"],128,5,self.config["time_embedding_dim"])])
+        self.conv.append(ConvBlock(128,64,5,self.config["time_embedding_dim"]))
+        if self.config["conv_layers"]==3:
+            self.conv.append(ConvBlock(64,self.config["output_channels"],3,self.config["time_embedding_dim"],final_layer=True))
+        elif self.config["conv_layers"]==4:
+            self.conv.append(ConvBlock(64,32,3,self.config["time_embedding_dim"]))
+            self.conv.append(ConvBlock(32,self.config["output_channels"],3,self.config["time_embedding_dim"],final_layer=True))
+        else:
+            self.conv.append(ConvBlock(64,32,3,self.config["time_embedding_dim"]))
+            for aa in range(4,self.config["conv_layers"]):
+                self.conv.append(ConvBlock(32,32,3,self.config["time_embedding_dim"]))
+            self.conv.append(ConvBlock(32,self.config["output_channels"],3,self.config["time_embedding_dim"],final_layer=True))
+
+    def forward(self,x,t):
+        t=self.time_embedding(t)
+        for layer in self.conv:
+            x=layer(x,t)
+        return x
 
 ## From Andrew/Pavel's code, function to create a CNN block
 def make_block(in_channels: int, out_channels: int, kernel_size: int, 
