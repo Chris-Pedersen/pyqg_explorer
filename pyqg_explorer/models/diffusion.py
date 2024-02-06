@@ -3,13 +3,30 @@ import torch
 import math
 from tqdm import tqdm
 
+import torch
+
+#torchvision ema implementation
+#https://github.com/pytorch/vision/blob/main/references/classification/utils.py#L159
+class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
+    """Maintains moving averages of model parameters using an exponential decay.
+    ``ema_avg = decay * avg_model_param + (1 - decay) * model_param``
+    `torch.optim.swa_utils.AveragedModel <https://pytorch.org/docs/stable/optim.html#custom-averaging-strategies>`_
+    is used to compute the EMA.
+    """
+
+    def __init__(self, model, decay, device="cpu"):
+        def ema_avg(avg_model_param, model_param, num_averaged):
+            return decay * avg_model_param + (1 - decay) * model_param
+
+        super().__init__(model, device, ema_avg, use_buffers=True)
+
 class Diffusion(nn.Module):
     def __init__(self,image_size,in_channels,model,time_embedding_dim=256,timesteps=1000,base_dim=32,dim_mults= [1, 2, 4, 8]):
         """ Pass the CNN architecture as a model object """
         
         super().__init__()
         self.timesteps=timesteps
-        self.in_channels=in_channelss
+        self.in_channels=in_channels
         self.image_size=image_size
 
         betas=self._cosine_variance_schedule(timesteps)
