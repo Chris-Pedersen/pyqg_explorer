@@ -19,17 +19,18 @@ class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
             return decay * avg_model_param + (1 - decay) * model_param
 
         super().__init__(model, device, ema_avg, use_buffers=True)
-
+        
 class Diffusion(nn.Module):
-    def __init__(self,image_size,in_channels,model,time_embedding_dim=256,timesteps=1000,base_dim=32,dim_mults= [1, 2, 4, 8]):
+    def __init__(self,config,model):
         """ Pass the CNN architecture as a model object """
         
         super().__init__()
-        self.timesteps=timesteps
-        self.in_channels=in_channels
-        self.image_size=image_size
+        self.config=config
+        self.timesteps=self.config["timesteps"]
+        self.in_channels=self.config["input_channels"]
+        self.image_size=self.config["image_size"]
 
-        betas=self._cosine_variance_schedule(timesteps)
+        betas=self._cosine_variance_schedule(self.config["timesteps"])
 
         alphas=1.-betas
         alphas_cumprod=torch.cumprod(alphas,dim=-1)

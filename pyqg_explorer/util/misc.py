@@ -2,6 +2,7 @@ import numpy as np
 import io
 import torch
 import pickle
+import pyqg_explorer.models.diffusion as diffusion
 import pyqg_explorer.models.fcnn as fcnn
 import pyqg_explorer.models.unet as unet
 import xarray as xr
@@ -40,6 +41,23 @@ def load_model(file_string):
     ## Load state_dict
     model.load_state_dict(model_dict["state_dict"])
     return model
+
+
+def load_diffusion_model(file_string):
+    """ Load a diffusion model. Read config file from the pickle
+        Reconstruct the CNN, then use same config file to create
+        a diffusion model with the loaded CNN """
+
+    with open(file_string, 'rb') as fp:
+        if torch.cuda.is_available():
+            model_dict = pickle.load(fp)
+        else:
+            model_dict = CPU_Unpickler(fp).load()
+    model_cnn=unet.Unet(model_dict["config"])
+    model_cnn.load_state_dict(model_dict["state_dict"])
+    diffusion_model=diffusion.Diffusion(model_dict["config"], model=model_cnn)
+    return diffusion_model
+
 
 ########################## Filtering functions ###########################
 def spectral_filter_and_coarsen(hires_var, m1, m2, filtr='builtin'):
