@@ -137,7 +137,7 @@ class OfflineDataset(BaseDataset):
         self.drop_spin_up=drop_spin_up
         data_full=xr.open_dataset(file_path)
         if self.drop_spin_up:
-            data_full=data_full.sel(time=slice(100800000.0,5.096036e+08))
+            data_full=data_full.sel(time=slice(2*100800000.0,5.096036e+08))
         
         def concat_arrays(xarray_subdata):
             def collapse_and_reshape(xarray):
