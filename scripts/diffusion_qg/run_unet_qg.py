@@ -145,7 +145,7 @@ for i in range(1,config["epochs"]+1):
     #save_image(samples,"results/steps_{:0>8}.png".format(global_steps),nrow=int(math.sqrt(args.n_samples)))
 
 
-model.save_model()
+model.model.save_model()
 wandb.finish()
 
 print("Finito")

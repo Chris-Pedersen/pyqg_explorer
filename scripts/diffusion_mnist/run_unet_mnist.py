@@ -47,7 +47,6 @@ config["lr"]=0.001
 config["batch_size"]=128
 config["epochs"]=100
 config["n_samples"]=12
-config["model_base_dim"]=64 ## base dim of unet
 config["timesteps"]=1000
 config["model_ema_steps"]=0
 config["model_ema_decay"]=0.995
@@ -136,7 +135,7 @@ for i in range(1,config["epochs"]+1):
     #save_image(samples,"results/steps_{:0>8}.png".format(global_steps),nrow=int(math.sqrt(args.n_samples)))
 
 
-model.save_model()
+model.model.save_model()
 wandb.finish()
 
 print("Finito")
