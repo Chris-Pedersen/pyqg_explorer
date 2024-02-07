@@ -372,24 +372,24 @@ class ParameterizationPerformance():
         fig, axs = plt.subplots(1, 2,figsize=(11,4))
         axs[0].set_title(r"Upper layer: $R^2$=%.2f" % self.r2_upper)
         axs[1].set_title(r"Lower layer: $R^2$=%.2f" % self.r2_lower)
-        axs[0].hist(self.x_np[:,2,:,:].flatten(),bins=200,density=True,alpha=0.5,label="True");
+        axs[0].hist(self.y_true[:,0,:,:].flatten(),bins=200,density=True,alpha=0.5,label="True");
         axs[0].hist(self.y_pred[:,0,:,:].flatten(),bins=200,density=True,alpha=0.5,label="Predicted");
-        axs[1].hist(self.x_np[:,3,:,:].flatten(),bins=200,density=True,alpha=0.5);
+        axs[1].hist(self.y_true[:,1,:,:].flatten(),bins=200,density=True,alpha=0.5);
         axs[1].hist(self.y_pred[:,1,:,:].flatten(),bins=200,density=True,alpha=0.5);
         axs[0].legend()
         return fig
 
-    def get_distribution_2d(self):
+    def get_distribution_2d(self,range=4):
         """ Plot histograms of the true and predicted subgrid forcing """
         fig, axs = plt.subplots(1, 2,figsize=(11,4))
         axs[0].set_title(r"Upper layer: $R^2$=%.2f" % self.r2_upper)
         axs[1].set_title(r"Lower layer: $R^2$=%.2f" % self.r2_lower)
         line=np.linspace(-4,4,100)
         axs[0].plot(line,line,linestyle="dashed",color="gray",alpha=0.5)
-        ax=axs[0].hist2d(self.y_true[:,0,:,:].flatten(),self.y_pred[:,0,:,:].flatten(),bins=100,range=[[-4,4],[-4,4]],cmap='RdPu');
+        ax=axs[0].hist2d(self.y_true[:,0,:,:].flatten(),self.y_pred[:,0,:,:].flatten(),bins=100,range=[[-range,range],[-range,range]],cmap='RdPu');
         fig.colorbar(ax[3], ax=axs[0])
         axs[1].plot(line,line,linestyle="dashed",color="gray",alpha=0.5)
-        ax=axs[1].hist2d(self.y_true[:,1,:,:].flatten(),self.y_pred[:,1,:,:].flatten(),bins=100,range=[[-4,4],[-4,4]],cmap='RdPu');
+        ax=axs[1].hist2d(self.y_true[:,1,:,:].flatten(),self.y_pred[:,1,:,:].flatten(),bins=100,range=[[-range,range],[-range,range]],cmap='RdPu');
         fig.colorbar(ax[3], ax=axs[1])
         return fig
 
