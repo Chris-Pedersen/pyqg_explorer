@@ -9,7 +9,6 @@ import pyqg_explorer.models.unet as unet
 import pyqg_explorer.dataset.forcing_dataset as forcing_dataset
 import matplotlib.pyplot as plt
 
-from utils import ExponentialMovingAverage
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -24,7 +23,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 config=reg_sys.config
 
 
-emulator_dataset=forcing_dataset.OfflineDataset("/scratch/cp3759/pyqg_data/sims/torchqg_sims/0_step/all.nc",seed=config["seed"],subsample=config["subsample"],drop_spin_up=config["drop_spin_up"])
+emulator_dataset=forcing_dataset.OfflineDataset("/scratch/cp3759/pyqg_data/sims/torchqg_sims/0_step/all_jet.nc",seed=config["seed"],subsample=config["subsample"],drop_spin_up=config["drop_spin_up"])
 
 ## Need to save renormalisation factors for when the CNN is plugged into pyqg
 config["q_mean_upper"]=emulator_dataset.q_mean_upper
