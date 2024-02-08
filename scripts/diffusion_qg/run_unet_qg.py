@@ -21,6 +21,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
 config=reg_sys.config
+config["subsample"]=34000
 
 
 emulator_dataset=forcing_dataset.OfflineDataset("/scratch/cp3759/pyqg_data/sims/torchqg_sims/0_step/all_jet.nc",seed=config["seed"],subsample=config["subsample"],drop_spin_up=config["drop_spin_up"])
@@ -40,6 +41,7 @@ train_loader = DataLoader(
     num_workers=10,
     batch_size=config["batch_size"],
     sampler=SubsetRandomSampler(emulator_dataset.train_idx),
+    drop_last=True
 )
 
 config["lr"]=0.001
@@ -49,14 +51,15 @@ config["n_samples"]=12
 config["timesteps"]=1000
 config["model_ema_steps"]=0
 config["model_ema_decay"]=0.995
-config["log_freq"]=10
+config["log_freq"]=50
 config["no_clip"]=True # set to normal sampling method without clip x_0 which could yield unstable samples
-config["dim_mults"]=[2,4]
+config["dim_mults"]=[2,4,8]
 config["time_embedding_dim"]=256
 config["input_channels"]=2
 config["output_channels"]=2
-config["base_dim"]=32
+config["base_dim"]=64
 config["image_size"]=64
+config["subsample"]=None
 config["save_name"]=["model_weights.pt"]
 
 
@@ -65,8 +68,9 @@ config["train_set_size"]=len(train_loader.dataset)
 
 model_cnn=unet.Unet(config)
 model=diffusion.Diffusion(config, model=model_cnn).to(device)
+config["num_params"]=sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-wandb.init(project="qg_diffusion",entity="chris-pedersen",config=config)
+wandb.init(project="qg_diffusion",entity="chris-pedersen",config=config,dir="/scratch/cp3759/pyqg_data/wandb_runs")
 wandb.watch(model, log_freq=1)
 
 config["save_path"]=wandb.run.dir
