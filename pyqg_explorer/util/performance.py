@@ -154,7 +154,6 @@ class EmulatorPerformance():
         else:
             return fig
 
-        
     def get_distribution_2d(self):
         """ Plot histograms of the true and predicted subgrid forcing """
         fig, axs = plt.subplots(1, 2,figsize=(11,4))
@@ -391,6 +390,16 @@ class ParameterizationPerformance():
         axs[1].plot(line,line,linestyle="dashed",color="gray",alpha=0.5)
         ax=axs[1].hist2d(self.y_true[:,1,:,:].flatten(),self.y_pred[:,1,:,:].flatten(),bins=100,range=[[-range,range],[-range,range]],cmap='RdPu');
         fig.colorbar(ax[3], ax=axs[1])
+        return fig
+
+    def get_error_distribution(self):
+        """ Plot distribution of the diff between predicted and true subgrid forcing """
+        fig, axs = plt.subplots(1, 2,figsize=(11,4))
+        plt.suptitle("Histogram of predicted-truth")
+        axs[0].set_title(r"Upper layer: $R^2$=%.2f" % self.r2_upper)
+        axs[1].set_title(r"Lower layer: $R^2$=%.2f" % self.r2_lower)
+        axs[0].hist((self.y_pred-self.y_true)[:,0,:,:].flatten(),bins=200,density=True,alpha=0.8);
+        axs[1].hist((self.y_pred-self.y_true)[:,1,:,:].flatten(),bins=200,density=True,alpha=0.8);
         return fig
 
     def subgrid_energy(self):
