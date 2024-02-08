@@ -130,7 +130,7 @@ class OfflineDataset(BaseDataset):
         test_ratio:  proportion of dataset to use as test data
         
         """
-        super().__init__()
+        super().__init__(subsample=subsample)
         
         data_full=xr.open_dataset(file_path)
 
