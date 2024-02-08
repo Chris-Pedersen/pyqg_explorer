@@ -63,7 +63,7 @@ class ResidualDataset(BaseDataset):
         valid_ratio:   proportion of dataset to use as validation data
         test_ratio:    proportion of dataset to use as test data
         """
-        super().__init__()
+        super().__init__(subsample=subsample,seed=seed)
         
         self.drop_spin_up=drop_spin_up
         data_full=xr.open_dataset(file_path)
@@ -208,7 +208,7 @@ class EmulatorDataset(BaseDataset):
         test_ratio:    proportion of dataset to use as test data
         
         """
-        super().__init__()
+        super().__init__(subsample=subsample,seed=seed)
         
         self.drop_spin_up=drop_spin_up
         data_full=xr.open_dataset(file_path)
@@ -280,7 +280,7 @@ class EmulatorForcingDataset(BaseDataset):
         test_ratio:      proportion of dataset to use as test data
         
         """
-        super().__init__()
+        super().__init__(subsample=subsample,seed=seed)
         
         self.drop_spin_up=drop_spin_up
         self.subgrid_models=subgrid_models
@@ -449,7 +449,7 @@ class RolloutDataset(BaseDataset):
         test_ratio:      proportion of dataset to use as test data
         
         """
-        super().__init__()
+        super().__init__(subsample=subsample,seed=seed)
         
         self.increment=increment
         self.rollout=rollout
