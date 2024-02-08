@@ -15,7 +15,8 @@ class BaseDataset(Dataset):
         self.valid_ratio=valid_ratio
         self.test_ratio=test_ratio
         self.subsample=subsample
-        self.rng = np.random.default_rng(seed)
+        self.seed=seed
+        self.rng = np.random.default_rng(self.seed)
 
     def _get_split_indices(self):
         """ Set indices for train, valid and test splits """
@@ -130,7 +131,7 @@ class OfflineDataset(BaseDataset):
         test_ratio:  proportion of dataset to use as test data
         
         """
-        super().__init__(subsample=subsample)
+        super().__init__(subsample=subsample,seed=seed)
         
         data_full=xr.open_dataset(file_path)
 
