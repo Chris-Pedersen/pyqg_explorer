@@ -8,6 +8,7 @@ import pyqg_explorer.models.fcnn as fcnn
 import pyqg_explorer.models.unet as unet
 import pyqg_explorer.dataset.forcing_dataset as forcing_dataset
 import matplotlib.pyplot as plt
+import cmocean
 
 import torch
 import torch.nn as nn
@@ -21,61 +22,62 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
 config=reg_sys.config
-config["subsample"]=34000
+## Stuff we are varying
+config["subsample"]=None
+config["base_dim"]=32
+config["dim_mults"]=[2,4]
 
-
-emulator_dataset=forcing_dataset.OfflineDataset("/scratch/cp3759/pyqg_data/sims/torchqg_sims/0_step/all_jet.nc",seed=config["seed"],subsample=config["subsample"],drop_spin_up=config["drop_spin_up"])
-
-## Need to save renormalisation factors for when the CNN is plugged into pyqg
-config["q_mean_upper"]=emulator_dataset.q_mean_upper
-config["q_mean_lower"]=emulator_dataset.q_mean_lower
-config["q_std_upper"]=emulator_dataset.q_std_upper
-config["q_std_lower"]=emulator_dataset.q_std_lower
-config["s_mean_upper"]=emulator_dataset.s_mean_upper
-config["s_mean_lower"]=emulator_dataset.s_mean_lower
-config["s_std_upper"]=emulator_dataset.s_std_upper
-config["s_std_lower"]=emulator_dataset.s_std_lower
-
-train_loader = DataLoader(
-    emulator_dataset,
-    num_workers=10,
-    batch_size=config["batch_size"],
-    sampler=SubsetRandomSampler(emulator_dataset.train_idx),
-    drop_last=True
-)
-
+## Stuff we are not varying (for now)
 config["lr"]=0.001
 config["batch_size"]=128
 config["epochs"]=100
-config["n_samples"]=12
+config["n_samples"]=8
 config["timesteps"]=1000
 config["model_ema_steps"]=0
 config["model_ema_decay"]=0.995
 config["log_freq"]=50
 config["no_clip"]=True # set to normal sampling method without clip x_0 which could yield unstable samples
-config["dim_mults"]=[2,4,8]
 config["time_embedding_dim"]=256
 config["input_channels"]=2
 config["output_channels"]=2
-config["base_dim"]=64
 config["image_size"]=64
-config["subsample"]=None
-config["save_name"]=["model_weights.pt"]
+config["save_name"]="model_weights.pt"
 
+snapshot_dataset=forcing_dataset.OfflineDataset("/scratch/cp3759/pyqg_data/sims/torchqg_sims/0_step/all_jet.nc",seed=config["seed"],subsample=config["subsample"],drop_spin_up=config["drop_spin_up"])
+
+## Need to save renormalisation factors for when the CNN is plugged into pyqg
+config["q_mean_upper"]=snapshot_dataset.q_mean_upper
+config["q_mean_lower"]=snapshot_dataset.q_mean_lower
+config["q_std_upper"]=snapshot_dataset.q_std_upper
+config["q_std_lower"]=snapshot_dataset.q_std_lower
+config["s_mean_upper"]=snapshot_dataset.s_mean_upper
+config["s_mean_lower"]=snapshot_dataset.s_mean_lower
+config["s_std_upper"]=snapshot_dataset.s_std_upper
+config["s_std_lower"]=snapshot_dataset.s_std_lower
+
+train_loader = DataLoader(
+    snapshot_dataset,
+    num_workers=10,
+    batch_size=config["batch_size"],
+    sampler=SubsetRandomSampler(snapshot_dataset.train_idx),
+    drop_last=True
+)
 
 device="cuda"
+
+wandb.init(project="qg_diffusion",entity="m2lines",config=config,dir="/scratch/cp3759/pyqg_data/wandb_runs")
+
+## Make sure save path, train set size, wandb url are passed to config before model is initialised!
+## otherwise these important things aren't part of the model config property
+config["save_path"]=wandb.run.dir
+config["wandb_url"]=wandb.run.get_url()
 config["train_set_size"]=len(train_loader.dataset)
 
 model_cnn=unet.Unet(config)
 model=diffusion.Diffusion(config, model=model_cnn).to(device)
 config["num_params"]=sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-wandb.init(project="qg_diffusion",entity="chris-pedersen",config=config,dir="/scratch/cp3759/pyqg_data/wandb_runs")
+wandb.config.update(config)
 wandb.watch(model, log_freq=1)
-
-config["save_path"]=wandb.run.dir
-config["wandb_url"]=wandb.run.get_url()
-
 
 #torchvision ema setting
 #https://github.com/pytorch/vision/blob/main/references/classification/train.py#L317
@@ -112,7 +114,6 @@ for i in range(1,config["epochs"]+1):
             wandb.log(log_dic)
             #print("Epoch[{}/{}],Step[{}/{}],loss:{:.5f},lr:{:.5f}".format(i+1,epochs,j,len(train_loader),
             #                                                    loss.detach().cpu().item(),scheduler.get_last_lr()[0]))
-
     
     ## Push loss values for each epoch to wandb
     log_dic={}
@@ -126,27 +127,37 @@ for i in range(1,config["epochs"]+1):
     model.eval()
     samples=model.sampling(config["n_samples"],clipped_reverse_diffusion=not config["no_clip"],device=device)
     
-    ## Upload figure of generated samples
+    ## Upload figures of generated samples
     fig_samples=plt.figure(figsize=(16,11))
-    plt.suptitle("epoch=%d" % i)
-    for aa in range(12):
-        plt.subplot(3,4,aa+1)
-        plt.imshow(samples[aa,0].cpu(),cmap="Purples")
+    samples=samples.cpu().numpy()
+    plt.suptitle("Generated samples at epoch=%d" % i)
+    for aa in range(4):
+        plt.subplot(4,4,aa+1)
+        image=samples[aa,0]
+        limit=np.max(np.abs(image))
+        plt.imshow(image,cmap=cmocean.cm.balance,vmin=-limit,vmax=limit)
         plt.colorbar()
-    plt.tight_layout()
-    wandb.log({"Samples upper":fig_samples})
-    
-    ## Upload figure of generated samples
-    fig_samples=plt.figure(figsize=(16,11))
-    plt.suptitle("epoch=%d" % i)
-    for aa in range(12):
-        plt.subplot(3,4,aa+1)
-        plt.imshow(samples[aa,1].cpu(),cmap="Purples")
-        plt.colorbar()
-    plt.tight_layout()
-    wandb.log({"Samples lower":fig_samples})
-    #save_image(samples,"results/steps_{:0>8}.png".format(global_steps),nrow=int(math.sqrt(args.n_samples)))
 
+        plt.subplot(4,4,aa+5)
+        image=samples[aa,1]
+        limit=np.max(np.abs(image))
+        plt.imshow(image,cmap=cmocean.cm.balance,vmin=-limit,vmax=limit)
+        plt.colorbar()
+
+        plt.subplot(4,4,aa+9)
+        image=samples[aa+4,0]
+        limit=np.max(np.abs(image))
+        plt.imshow(image,cmap=cmocean.cm.balance,vmin=-limit,vmax=limit)
+        plt.colorbar()
+
+        plt.subplot(4,4,aa+13)
+        image=samples[aa+4,1]
+        limit=np.max(np.abs(image))
+        plt.imshow(image,cmap=cmocean.cm.balance,vmin=-limit,vmax=limit)
+        plt.colorbar()
+    plt.tight_layout()
+    wandb.log({"Samples":fig_samples})
+    plt.close()
 
 model.model.save_model()
 wandb.finish()
