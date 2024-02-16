@@ -54,7 +54,8 @@ class Diffusion(nn.Module):
         ## here we use the absolute magnitude of a truncated normal with mean 0
         if self.noise_sampling_coeff:
             t=truncnorm(a=-1/self.noise_sampling_coeff, b=1/self.noise_sampling_coeff, scale=self.noise_sampling_coeff).rvs(size=1)[0]
-        t=torch.randint(0,self.timesteps,(x.shape[0],)).to(x.device)
+        else:
+            t=torch.randint(0,self.timesteps,(x.shape[0],)).to(x.device)
         x_t=self._forward_diffusion(x,t,noise)
         pred_noise=self.model(x_t,t)
 
