@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 import math
 from tqdm import tqdm
+from scipy.stats import truncnorm
 
 import torch
 
@@ -19,16 +20,20 @@ class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
             return decay * avg_model_param + (1 - decay) * model_param
 
         super().__init__(model, device, ema_avg, use_buffers=True)
+
         
 class Diffusion(nn.Module):
-    def __init__(self,config,model):
-        """ Pass the CNN architecture as a model object """
+    def __init__(self,config,model,silence=True,noise_sampling_coeff=None):
+        """ Pass the CNN architecture as a model object.
+        Silence disables tqdm bar during sampling (to not pollute slurm logfiles) """
         
         super().__init__()
         self.config=config
         self.timesteps=self.config["timesteps"]
         self.in_channels=self.config["input_channels"]
         self.image_size=self.config["image_size"]
+        self.silence=silence
+        self.noise_sampling_coeff=noise_sampling_coeff
 
         betas=self._cosine_variance_schedule(self.config["timesteps"])
 
@@ -45,6 +50,10 @@ class Diffusion(nn.Module):
 
     def forward(self,x,noise):
         # x:NCHW
+        ## Either uniform noise sampling, or selectively closer to 0
+        ## here we use the absolute magnitude of a truncated normal with mean 0
+        if self.noise_sampling_coeff:
+            t=truncnorm(a=-1/self.noise_sampling_coeff, b=1/self.noise_sampling_coeff, scale=self.noise_sampling_coeff).rvs(size=1)[0]
         t=torch.randint(0,self.timesteps,(x.shape[0],)).to(x.device)
         x_t=self._forward_diffusion(x,t,noise)
         pred_noise=self.model(x_t,t)
@@ -54,7 +63,7 @@ class Diffusion(nn.Module):
     @torch.no_grad()
     def sampling(self,n_samples,clipped_reverse_diffusion=True,device="cuda"):
         x_t=torch.randn((n_samples,self.in_channels,self.image_size,self.image_size)).to(device)
-        for i in tqdm(range(self.timesteps-1,-1,-1),desc="Sampling"):
+        for i in tqdm(range(self.timesteps-1,-1,-1),desc="Sampling",disable=self.silence):
             noise=torch.randn_like(x_t).to(device)
             t=torch.tensor([i for _ in range(n_samples)]).to(device)
 
@@ -63,7 +72,7 @@ class Diffusion(nn.Module):
             else:
                 x_t=self._reverse_diffusion(x_t,t,noise)
 
-        x_t=(x_t+1.)/2. #[-1,1] to [0,1]
+        #x_t=(x_t+1.)/2. #[-1,1] to [0,1]
 
         return x_t
     
