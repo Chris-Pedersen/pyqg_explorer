@@ -62,6 +62,7 @@ class Diffusion(nn.Module):
 
     @torch.no_grad()
     def sampling(self,n_samples,clipped_reverse_diffusion=True,device="cuda"):
+        """ Generate fresh samples from pure noise """
         x_t=torch.randn((n_samples,self.in_channels,self.image_size,self.image_size)).to(device)
         for i in tqdm(range(self.timesteps-1,-1,-1),desc="Sampling",disable=self.silence):
             noise=torch.randn_like(x_t).to(device)
@@ -72,7 +73,20 @@ class Diffusion(nn.Module):
             else:
                 x_t=self._reverse_diffusion(x_t,t,noise)
 
-        #x_t=(x_t+1.)/2. #[-1,1] to [0,1]
+        return x_t
+
+    @torch.no_grad()
+    def denoising(self,noised_samples,denoising_timestep,device="cuda"):
+        """ Pass validation samples, noised to time `denoising timstep`. Denoise these samples and return """
+        x_t=noised_samples.to(device)
+        for i in tqdm(range(denoising_timestep-1,-1,-1),desc="Denoising",disable=self.silence):
+            noise=torch.randn_like(x_t).to(device)
+            t=torch.tensor([i for _ in range(n_samples)]).to(device)
+
+            if clipped_reverse_diffusion:
+                x_t=self._reverse_diffusion_with_clip(x_t,t,noise)
+            else:
+                x_t=self._reverse_diffusion(x_t,t,noise)
 
         return x_t
     
