@@ -90,12 +90,8 @@ class Diffusion(nn.Module):
         x_t=noised_samples.to(device)
         for i in tqdm(range(denoising_timestep-1,-1,-1),desc="Denoising",disable=self.silence):
             noise=torch.randn_like(x_t).to(device)
-            t=torch.tensor([i for _ in range(n_samples)]).to(device)
-
-            if clipped_reverse_diffusion:
-                x_t=self._reverse_diffusion_with_clip(x_t,t,noise)
-            else:
-                x_t=self._reverse_diffusion(x_t,t,noise)
+            t=torch.tensor([i for _ in range(len(noised_samples))]).to(device)
+            x_t=self._reverse_diffusion(x_t,t,noise)
 
         return x_t
     
