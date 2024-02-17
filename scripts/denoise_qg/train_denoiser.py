@@ -145,7 +145,7 @@ for i in range(1,config["epochs"]+1):
     valid_imgs=next(iter(valid_loader))
     valid_imgs=valid_imgs[0].to(device)
     noise=torch.randn_like(valid_imgs).to(device)
-    t=(torch.ones(len(valid_imgs),dtype=torch.int64)*200).to(device)
+    t=(torch.ones(len(valid_imgs),dtype=torch.int64)*config["denoise_time"]).to(device)
     noised=model._forward_diffusion(valid_imgs,t,noise)
     denoised=model.denoising(noised,config["denoise_time"])
     
