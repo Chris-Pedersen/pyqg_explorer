@@ -42,7 +42,7 @@ config=reg_sys.config
 ## Stuff we are varying
 config["subsample"]=int(args.subsample)
 config["base_dim"]=int(args.base_dim)
-config["dim_mults"]=[2,4]
+config["dim_mults"]=[2,4,8]
 config["noise_sampling_coeff"]=0.35
 config["denoise_time"]=int(args.denoise_time)
 
