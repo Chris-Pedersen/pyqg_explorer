@@ -23,7 +23,7 @@ class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
 
         
 class Diffusion(nn.Module):
-    def __init__(self,config,model,silence=True,noise_sampling_coeff=None):
+    def __init__(self,config,model,silence=True):
         """ Pass the CNN architecture as a model object.
         Silence disables tqdm bar during sampling (to not pollute slurm logfiles) """
         
@@ -32,8 +32,10 @@ class Diffusion(nn.Module):
         self.timesteps=self.config["timesteps"]
         self.in_channels=self.config["input_channels"]
         self.image_size=self.config["image_size"]
+        self.noise_sampling_coeff=config["noise_sampling_coeff"]
         self.silence=silence
-        self.noise_sampling_coeff=noise_sampling_coeff
+        self.sampled_times=[]
+        
 
         betas=self._cosine_variance_schedule(self.config["timesteps"])
 
@@ -53,9 +55,15 @@ class Diffusion(nn.Module):
         ## Either uniform noise sampling, or selectively closer to 0
         ## here we use the absolute magnitude of a truncated normal with mean 0
         if self.noise_sampling_coeff:
-            t=truncnorm(a=-1/self.noise_sampling_coeff, b=1/self.noise_sampling_coeff, scale=self.noise_sampling_coeff).rvs(size=1)[0]
+            ## Draw from [0,1]
+            t=torch.tensor(abs(truncnorm(a=-1/self.noise_sampling_coeff, b=1/self.noise_sampling_coeff,
+                                            scale=self.noise_sampling_coeff).rvs(size=(x.shape[0],))))
+            ## Normalise to full span of timestep range, and convert to int
+            t=t*self.timesteps
+            t=t.to(torch.int64).to(x.device)
         else:
             t=torch.randint(0,self.timesteps,(x.shape[0],)).to(x.device)
+        self.sampled_times.append(t)
         x_t=self._forward_diffusion(x,t,noise)
         pred_noise=self.model(x_t,t)
 
