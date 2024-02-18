@@ -1,6 +1,5 @@
 import argparse
 import wandb
-import math
 import numpy as np
 import matplotlib.pyplot as plt
 import cmocean
@@ -21,21 +20,20 @@ import pyqg_explorer.models.unet as unet
 import pyqg_explorer.dataset.forcing_dataset as forcing_dataset
 
 parser = argparse.ArgumentParser(description="Diffusion model denoiser")
-parser.add_argument(
-    "--base-dim", required=True, type=float, help="base dim of Unet"
-)
-parser.add_argument("--denoise-time",required=True,type=float,default=200,help="denoise level",
-)
-parser.add_argument("--subsample",type=int,
-    help="subsample training data",
-)
+parser.add_argument("--base-dim", required=True, type=float, help="base dim of Unet")
+parser.add_argument("--denoise-time",required=True,type=float,default=200,help="denoise level")
+parser.add_argument("--subsample",type=int,help="subsample training data")
+parser.add_argument("--jet",action=argparse.BooleanOptionalAction,
+                default=False,help="Add this flag to run on jet config")
 args = parser.parse_args()
+print(args)
 
 config=reg_sys.config
 ## Stuff we are varying
 config["subsample"]=int(args.subsample)
 config["base_dim"]=int(args.base_dim)
 config["denoise_time"]=int(args.denoise_time)
+config["eddy"]=not args.jet
 
 ## Stuff we are not varying (for now)
 config["noise_sampling_coeff"]=0.35
@@ -51,11 +49,17 @@ config["input_channels"]=2
 config["output_channels"]=2
 config["image_size"]=64
 config["save_name"]="model_weights.pt"
-config["eddy"]=False
 config["valid_batch_size"]=20
+print(config)
 
-snapshot_dataset=forcing_dataset.OfflineDataset("/scratch/cp3759/pyqg_data/sims/torchqg_sims/0_step/all_jet.nc",
+if config["eddy"]:
+    sim_string="eddy"
+else:
+    sim_string="jet"
+
+snapshot_dataset=forcing_dataset.OfflineDataset("/scratch/cp3759/pyqg_data/sims/torchqg_sims/0_step/all_%s.nc" % sim_string,
                             seed=config["seed"],subsample=config["subsample"],drop_spin_up=config["drop_spin_up"])
+print(sim_string)
 
 ## Save renormalisation factors for mapping NN predictions to and from physical units
 config["q_mean_upper"]=snapshot_dataset.q_mean_upper
