@@ -1,8 +1,13 @@
+import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from IPython.display import HTML
 import torch
 import numpy as np
 import pyqg_explorer.util.transforms as transforms
+import torch_qg.util as util
+import torch_qg.model as torch_model
+import torch_qg.parameterizations as torch_param
+import cmocean
 
 
 class DiffusionAnimation():
@@ -128,3 +133,156 @@ class DiffusionAnimation():
         self._push_forward()
 
         return
+
+
+def field_to_sims(valid_imgs,denoised,config):
+    """ For tensor of validation images, and denosied images, return lists of sims
+        set with potential vorticity in each of these images. The idea is to use
+        the torch_qg simulation object to calculate the relevant diagnostics. The
+        sim list can then be passed to spectral_diagnostics to plot the spectra """
+
+    if config["eddy"]:
+        print("eddying")
+        add_config={}
+    else:
+        ## If system is jet, add jet config to sim so we get the right
+        ## stream function inversion in KE calculation
+        print("jetting")
+        add_config=torch_model.jet_config
+
+    clean_sims=[]
+    denoised_sims=[]
+    for aa in range(len(valid_imgs)):
+        x_upper = transforms.denormalise_field(valid_imgs[aa][0],config["q_mean_upper"],config["q_std_upper"])
+        x_lower = transforms.denormalise_field(valid_imgs[aa][1],config["q_mean_lower"],config["q_std_lower"])
+        q_true=torch.stack((x_upper,x_lower),dim=0)
+        true=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky(),**add_config)
+        true.set_q1q2(q_true)
+        clean_sims.append(true)
+
+        x_upper = transforms.denormalise_field(denoised[aa][0],config["q_mean_upper"],config["q_std_upper"])
+        x_lower = transforms.denormalise_field(denoised[aa][1],config["q_mean_lower"],config["q_std_lower"])
+        q_dn=torch.stack((x_upper,x_lower),dim=0)
+        denoised_sim=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky(),**add_config)
+        denoised_sim.set_q1q2(q_dn)
+        denoised_sims.append(denoised_sim)
+    return clean_sims,denoised_sims
+
+
+def spectral_diagnostics(sims,sims2,epoch,eddy=True):
+    """ Take a true sim, and some denoised sims. Plot spectra. We are just assuming the first
+        set of sims are truth, which we'll plot in black, and the second are some kind of comparison:
+        noised or denoised, which we'll plot in red """
+
+    fig, axs = plt.subplots(2, 3,figsize=(10,5))
+
+
+    axs[0,0].set_title("KE spectrum")
+    
+    axs[0,1].set_title("Enstrophy spectrum")
+    
+    axs[0,2].set_title("q pdf")
+    
+    if eddy:
+        plt.suptitle("Spectra and distributions at epoch %d, eddy" % epoch)
+        ## Set ylimits for eddy spectra
+        axs[0,0].set_ylim(1e-3,5e2)
+        axs[1,0].set_ylim(1e-3,1e1)
+        axs[0,1].set_ylim(5e-10,6e-6)
+        axs[1,1].set_ylim(8e-11,1e-7)
+    else:
+        plt.suptitle("Spectra and distributions at epoch %d, jet" % epoch)
+        ## Set ylimits for jet spectra
+        axs[0,0].set_ylim(1e-3,5e2)
+        axs[1,0].set_ylim(1e-4,1e2)
+        axs[0,1].set_ylim(5e-10,6e-6)
+        axs[1,1].set_ylim(1e-11,1e-8)
+    
+    
+    for aa,sim in enumerate(sims):
+        kes=sim.get_KE_ispec()
+        ens=sim.get_enstrophy_ispec()
+        
+        ## Kinetic energy spectra
+        axs[0,0].loglog(sim.k1d_plot,kes[0],color="black",alpha=0.3)
+        axs[1,0].loglog(sim.k1d_plot,kes[1],color="black",alpha=0.3)
+
+        ## Enstrophy spectra
+        axs[0,1].loglog(sim.k1d_plot,ens[0],color="black",alpha=0.3)
+        axs[1,1].loglog(sim.k1d_plot,ens[1],color="black",alpha=0.3)
+
+        ux,uy=util.PDF_histogram(sim.q[0].cpu().numpy().flatten())
+        axs[0,2].semilogy(ux,uy,color="black",alpha=0.3)
+
+        vx,vy=util.PDF_histogram(sim.q[1].cpu().numpy().flatten())
+        axs[1,2].semilogy(vx,vy,color="black",alpha=0.3)
+        
+    for aa,sim in enumerate(sims2):
+        kes=sim.get_KE_ispec()
+        ens=sim.get_enstrophy_ispec()
+        
+        ## Kinetic energy spectra
+        axs[0,0].loglog(sim.k1d_plot,kes[0],color="red",alpha=0.3)
+        axs[1,0].loglog(sim.k1d_plot,kes[1],color="red",alpha=0.3)
+
+        ## Enstrophy spectra
+        axs[0,1].loglog(sim.k1d_plot,ens[0],color="red",alpha=0.3)
+        axs[1,1].loglog(sim.k1d_plot,ens[1],color="red",alpha=0.3)
+
+        ux,uy=util.PDF_histogram(sim.q[0].cpu().numpy().flatten())
+        axs[0,2].semilogy(ux,uy,color="red",alpha=0.3)
+
+        vx,vy=util.PDF_histogram(sim.q[1].cpu().numpy().flatten())
+        axs[1,2].semilogy(vx,vy,color="red",alpha=0.3)
+
+    return fig
+
+
+def plot_fields(valid_imgs,noised,denoised,noise_loss,denoise_loss,epoch):
+    """ For a set of validation images, noised images, denoised images
+        plot a random sample. Also show MSE of the noising process, and the
+        denoised MSE """
+
+    plt.figure(figsize=(8,4))
+    plt.suptitle("Denoised fields at epoch=%d" % epoch)
+
+    valid_idx=np.random.randint(len(valid_imgs))
+    fig_denoise=plt.subplot(2,3,1)
+    plt.title("Original field")
+    plt.imshow(valid_imgs[valid_idx][0].cpu().numpy(),cmap=cmocean.cm.balance)
+    plt.xticks([], [])
+    plt.yticks([], [])
+    plt.colorbar()
+    plt.subplot(2,3,4)
+    plt.xticks([], [])
+    plt.yticks([], [])
+    plt.imshow(valid_imgs[valid_idx][1].cpu().numpy(),cmap=cmocean.cm.balance)
+    plt.colorbar()
+
+    plt.subplot(2,3,2)
+    plt.xticks([], [])
+    plt.yticks([], [])
+    plt.title("Noised field: %.2f" % noise_loss)
+    plt.imshow(noised[valid_idx][0].cpu().numpy(),cmap=cmocean.cm.balance)
+    plt.colorbar()
+    plt.subplot(2,3,5)
+    plt.xticks([], [])
+    plt.yticks([], [])
+    plt.imshow(noised[valid_idx][1].cpu().numpy(),cmap=cmocean.cm.balance)
+    plt.colorbar()
+
+    plt.subplot(2,3,3)
+    plt.xticks([], [])
+    plt.yticks([], [])
+    plt.title("Denoised field: %.2f" % denoise_loss)
+    plt.imshow(denoised[valid_idx][0].cpu().numpy(),cmap=cmocean.cm.balance)
+    plt.colorbar()
+    plt.subplot(2,3,6)
+    plt.xticks([], [])
+    plt.yticks([], [])
+    plt.imshow(denoised[valid_idx][1].cpu().numpy(),cmap=cmocean.cm.balance)
+    plt.colorbar()
+
+    plt.tight_layout()
+
+    return fig_denoise
