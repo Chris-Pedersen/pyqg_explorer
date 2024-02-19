@@ -484,6 +484,7 @@ class RolloutDataset(BaseDataset):
         data_attrs=json.loads(data.attrs['pyqg_params'])
         self.data_increment=data_attrs["increment"]
         self.data_rollout=data_attrs["rollout"]
+        assert self.data_rollout >= self.config["rollout"], "Requested rollout longer than dataset rollout"
         self.num_rollouts=int(len(data.time)/(self.data_rollout+1))
         cuts=np.array([],dtype=int)
         for aa in range(self.num_rollouts):
@@ -597,7 +598,7 @@ class EmulatorDatasetTorch(BaseDataset):
         file_path=file_path+"%d_step/all_%s.nc" % (self.increment,self.sim_config)
         data_full=xr.open_dataset(file_path)
         self._get_cuts(data_full)
-        self.q_data=torch.tensor(data_full.q[:,self.cuts].values)
+        self.q_data=torch.tensor(data_full.q[:,self.cuts].values,dtype=torch.float32)
         ## We are dealing with a fair whack of memory here, so don't hang around for garbage collection
         del(data_full)
 
