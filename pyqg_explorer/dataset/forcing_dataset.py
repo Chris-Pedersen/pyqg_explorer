@@ -132,8 +132,6 @@ class OfflineDataset(BaseDataset):
         
         """
         super().__init__(subsample=subsample,seed=seed)
-        
-        data_full=xr.open_dataset(file_path)
 
         self.drop_spin_up=drop_spin_up
         data_full=xr.open_dataset(file_path)
