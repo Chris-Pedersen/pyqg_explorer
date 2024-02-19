@@ -561,3 +561,89 @@ class RolloutDataset(BaseDataset):
             return (q_out,s_out)
         else:
             return q_out
+
+class EmulatorDatasetTorch(BaseDataset):
+    """
+    Load rollout datasets for torchqg sims, for the purposes of training an emulator
+    over multiple recurrent passes
+    """
+    def __init__(self,increment,rollout,file_path="/scratch/cp3759/pyqg_data/sims/torchqg_sims/",eddy=True,seed=42,subsample=None,train_ratio=0.75,valid_ratio=0.25,test_ratio=0.0):
+        """
+        increment:       number of numerical timesteps between snapshots
+        rollout:         number of snapshots to store at each datapoint
+        file_path:       data directory
+        eddy:            flag to decide if we are using eddy or jet sims
+        seed:            random seed used to create train/valid/test splits
+        subsample:       None or int: if int, subsample the dataset to a total of N=subsample maps
+        train_ratio:     proportion of dataset to use as training data
+        valid_ratio:     proportion of dataset to use as validation data
+        test_ratio:      proportion of dataset to use as test data
+        
+        """
+        super().__init__(subsample=subsample,seed=seed)
+        
+        self.increment=increment
+        self.rollout=rollout
+        self.file_path=file_path
+        self.subsample=subsample
+        self.increment=increment
+        self.rollout=rollout
+        self.cuts=None
+        if eddy==True:
+            self.sim_config="eddy"
+        else:
+            self.sim_config="jet"
+        
+        file_path=file_path+"%d_step/all_%s.nc" % (self.increment,self.sim_config)
+        data_full=xr.open_dataset(file_path)
+        self._get_cuts(data_full)
+        self.q_data=torch.tensor(data_full.q[:,self.cuts].values)
+        ## We are dealing with a fair whack of memory here, so don't hang around for garbage collection
+        del(data_full)
+
+        ## View [sim index, snapshot index, layer index, nx, ny] -> [sim index, trajectory index, rollout index, layer index, nx, ny]
+        self.q_data=self.q_data.view(self.q_data.shape[0],int(self.q_data.shape[1]/(self.rollout+1)),int(self.rollout+1),self.q_data.shape[-3],self.q_data.shape[-2],self.q_data.shape[-1])
+        ## Reshape [sim index, trajectory index, rollout index, layer index, nx, ny] -> [batch index, rollout index, layer index, nx, ny]
+        self.q_data=self.q_data.reshape(self.q_data.shape[0]*self.q_data.shape[1],self.q_data.shape[-4],self.q_data.shape[-3],self.q_data.shape[-2],self.q_data.shape[-1])
+        
+        ## Find normalisation factors
+        self.q_mean_upper,self.q_mean_lower=self.q_data.mean(dim=[0,1,3,4])
+        self.q_std_upper,self.q_std_lower=self.q_data.std(dim=[0,1,3,4])
+        
+        self.len=len(self.q_data)
+        ## Subsample datasets if required
+        if self.subsample:
+            self._subsample()
+            
+        self.train_ratio=train_ratio
+        self.valid_ratio=valid_ratio
+        self.test_ratio=test_ratio
+        self.rng = np.random.default_rng(seed)
+
+        self.len=len(self.q_data)
+        ## Generate shuffled list of indices
+        self._get_split_indices()
+    
+    def _get_cuts(self,data):
+        """ For a requested increment and rollout, find a list of indices to subsample the correct snapshots from the full dataset """
+        data_attrs=json.loads(data.attrs['rollout_config'])
+        self.data_increment=data_attrs["increment"]
+        self.data_rollout=data_attrs["rollout"]
+        self.num_rollouts=int(len(data.time)/(self.data_rollout+1))
+        cuts=np.array([],dtype=int)
+        for aa in range(self.num_rollouts):
+            cuts=np.append(cuts,aa*(self.data_rollout+1)+np.arange(0,int((self.increment/self.data_increment)*self.rollout+1),int(self.increment/self.data_increment)))
+        self.cuts=cuts
+        return
+
+    def __len__(self):
+        return self.len
+    
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        ## Return normalised arrays
+        q_upper=transforms.normalise_field(self.q_data[idx,:,0],self.q_mean_upper,self.q_std_upper)
+        q_lower=transforms.normalise_field(self.q_data[idx,:,1],self.q_mean_lower,self.q_std_lower)
+        q_out=torch.stack((q_upper,q_lower),dim=1)
+        return q_out
