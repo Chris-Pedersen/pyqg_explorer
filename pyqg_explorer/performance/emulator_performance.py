@@ -13,6 +13,11 @@ class EmulatorPerformance():
             valid_loader: validation loader from EmulatorDatasetTorch """
         
         self.network=network
+        """ Are we using eddy or jet """
+        if network.config["eddy"]:
+            self.eddy="eddy"
+        else:
+            self.eddy="jet"
         
     def _get_next_step(self,q_i):
         """ For a given field at time i, use the attributed model to push the system forward
@@ -40,7 +45,7 @@ class EmulatorPerformance():
         return q_i_dt+q_i
     
     def get_short_MSEs(self,return_data=False):
-        ds=xr.load_dataset("/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/torch_eddy_1k.nc")
+        ds=xr.load_dataset("/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/torch_%s_1k.nc" % self.eddy)
         times=np.arange(self.network.config["increment"],ds.q.shape[1],self.network.config["increment"])
 
         criterion=nn.MSELoss()
@@ -73,7 +78,6 @@ class EmulatorPerformance():
 
         return fig
 
-        
     def denorm(self,q):
         ## Map from physical to normalised space using the factors used to train the network
         ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
