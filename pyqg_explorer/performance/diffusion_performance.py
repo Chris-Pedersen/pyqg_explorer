@@ -140,6 +140,160 @@ class DiffusionAnimation():
         
         return
 
+class ReverseDiffusionAnimation():
+    """ Animation of the reverse diffusion process (denoising example) for a 2 layer system """
+    def __init__(self,q_input,model,fps=10,nSteps=1000,savestring=None):
+        self.q_input=torch.tensor(q_input,dtype=torch.float32)
+        self.model=model
+        self.fps = fps
+        self.nFrames = nSteps
+        self.savestring = savestring
+        self.mse_u=np.array([])
+        self.mse_l=np.array([])
+        self.criterion=torch.nn.MSELoss()
+        self.timesx=np.linspace(0,nSteps,nSteps+1)
+        self.i=nSteps
+        
+        x_upper = transforms.normalise_field(self.q_input[0],self.model.config["q_mean_upper"],self.model.config["q_std_upper"])
+        x_lower = transforms.normalise_field(self.q_input[1],self.model.config["q_mean_lower"],self.model.config["q_std_lower"])
+        self.q_orig = torch.stack((x_upper,x_lower),dim=0).unsqueeze(0)
+        
+        t=(torch.ones(len(self.q_orig),dtype=torch.int64)*self.nFrames).to(device)
+        noise=torch.randn_like(self.q_orig).to(device)
+        self.noised=model._forward_diffusion(self.q_orig,t,noise)
+        self.q_0=self.q_orig ## For loss evaluations, keep unsqeueezed and on gpu
+        self.q_orig=self.q_orig.squeeze().cpu().numpy()
+        self.x_t=self.noised
+        self.noised=self.noised.squeeze().cpu().numpy()
+        
+        self._push_backward()
+    
+        
+    def _push_backward(self):
+        """ Perform a single denoising step """
+        
+        noise=torch.randn_like(self.x_t).to(device)
+        self.x_t_old=self.x_t.squeeze().cpu().numpy()
+        t=torch.tensor([self.i for _ in range(len(self.x_t))]).to(device)
+        self.x_t=self.model._reverse_diffusion(self.x_t,t,noise)
+        
+        mse_u=self.criterion(self.q_0[:,0],self.x_t[:,0])
+        mse_l=self.criterion(self.q_0[:,1],self.x_t[:,1])
+        
+        self.denoised=self.x_t.squeeze().cpu().numpy()
+        
+        self.mse_u=np.append(self.mse_u,mse_u.cpu().numpy())
+        self.mse_l=np.append(self.mse_l,mse_l.cpu().numpy())
+        
+        
+        return
+    
+    def animate(self):
+        fig, axs = plt.subplots(2, 5,figsize=(12,5))
+        axs[0,0].set_title("Before noise")
+        self.ax1=axs[0,0].imshow(self.q_orig[0],cmap=cmocean.cm.balance)
+        #fig.colorbar(self.ax1, ax=axs[0][0])
+        self.ax2=axs[1,0].imshow(self.q_orig[1],cmap=cmocean.cm.balance)
+        #fig.colorbar(self.ax2, ax=axs[1][0])
+
+        axs[0,1].set_title("Noised image")
+        self.ax3=axs[0,1].imshow(self.noised[0],cmap=cmocean.cm.balance)
+        #fig.colorbar(self.ax3, ax=axs[0][1])
+        self.ax4=axs[1,1].imshow(self.noised[1],cmap=cmocean.cm.balance)
+        #fig.colorbar(self.ax4, ax=axs[1][1])
+        
+        axs[0,2].set_title("Noise removed")
+        self.ax5=axs[0,2].imshow(self.denoised[0],cmap=cmocean.cm.balance)
+        #fig.colorbar(self.ax5, ax=axs[0][2])
+        self.ax6=axs[1,2].imshow(self.denoised[1],cmap=cmocean.cm.balance)
+        #fig.colorbar(self.ax6, ax=axs[1][2])
+
+        axs[0,3].set_title("Denoising...")
+        self.ax7=axs[0,3].imshow(self.denoised[0],cmap=cmocean.cm.balance)
+        #fig.colorbar(self.ax5, ax=axs[0][2])
+        self.ax8=axs[1,3].imshow(self.denoised[1],cmap=cmocean.cm.balance)
+        #fig.colorbar(self.ax6, ax=axs[1][2])
+
+        axs[0,4].set_title("Reconstruction MSE loss")
+        #self.ax7=axs[0,3].plot(1-(model.alphas_cumprod[:self.t].cpu()))
+        self.ax9=[axs[0][4].plot(-1),axs[0][4].plot(-1)]
+        axs[0,4].set_ylim(0,max(self.mse_u))
+        axs[0,4].set_xlim(0,self.nFrames)
+
+        self.ax10=[axs[1][4].plot(1),axs[1][4].plot(1)]
+        axs[1][4].set_ylim(0,max(self.mse_l))
+        axs[1][4].set_xlim(0,self.nFrames)
+        
+        fig.tight_layout()
+        
+        anim = animation.FuncAnimation(
+                                       fig, 
+                                       self.animate_func, 
+                                       frames = self.nFrames,
+                                       interval = 1000 / self.fps, # in ms
+                                       )
+        plt.close()
+        
+        if self.savestring:
+            print("saving")
+            # saving to m4 using ffmpeg writer 
+            writervideo = animation.FFMpegWriter(fps=self.fps) 
+            anim.save('%s.mp4' % self.savestring, writer=writervideo) 
+            plt.close()
+        else:
+            return HTML(anim.to_html5_video())
+        
+        
+    def animate_func(self,i):
+        if i % self.fps == 0:
+            print( '.', end ='' )
+            
+        self.i=self.nFrames-i
+    
+        ## Set image and colorbar for each panel
+        image=self.q_orig[0]
+        self.ax1.set_array(image)
+        self.ax1.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.q_orig[1]
+        self.ax2.set_array(image)
+        
+        self.ax2.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.noised[0]
+        self.ax3.set_array(image)
+        self.ax3.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.noised[1]
+        self.ax4.set_array(image)
+        self.ax4.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.denoised[0]-self.x_t_old[0]
+        self.ax5.set_array(image)
+        self.ax5.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.denoised[1]-self.x_t_old[1]
+        self.ax6.set_array(image)
+        self.ax6.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.denoised[0]
+        self.ax7.set_array(image)
+        self.ax7.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+        
+        image=self.denoised[1]
+        self.ax8.set_array(image)
+        self.ax8.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
+ 
+        self.ax9[0][0].set_xdata(np.array(self.timesx[0:i]))
+        self.ax9[0][0].set_ydata(np.array(self.mse_u[:i]))
+        
+        self.ax10[0][0].set_xdata(np.array(self.timesx[0:i]))
+        self.ax10[0][0].set_ydata(np.array(self.mse_l[:i]))
+
+        self._push_backward()
+        
+        return
+
 
 def field_to_sims(valid_imgs,denoised,config):
     """ For tensor of validation images, and denosied images, return lists of sims
