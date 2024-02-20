@@ -11,33 +11,32 @@ import cmocean
 
 
 class DiffusionAnimation():
-    def __init__(self,sim,model,fps=10,nSteps=1000):
-        """ Takes a torchqg sim, a diffusion model, and animates the forward diffusion
-            process. Will plot the noise level and MSE between true and noised fields as
-            the diffusion process evolves """
+    """ Animation of the forward diffusion process for a 2 layer system """
+    def __init__(self,sim,model,fps=10,nSteps=1000,savestring=None):
         self.sim=sim
         self.model=model
         self.fps = fps
         self.nFrames = nSteps
+        self.savestring = savestring
         self.mse=np.array([])
         self.criterion=torch.nn.MSELoss()
         self.timesx=np.linspace(0,1000,1001)
         self.i=0
-
-        x_upper = transforms.normalise_field(self.sim.q[0],config["q_mean_upper"],config["q_std_upper"])
-        x_lower = transforms.normalise_field(self.sim.q[1],config["q_mean_lower"],config["q_std_lower"])
+        
+        x_upper = transforms.normalise_field(self.sim.q[0],self.model.config["q_mean_upper"],self.model.config["q_std_upper"])
+        x_lower = transforms.normalise_field(self.sim.q[1],self.model.config["q_mean_lower"],self.model.config["q_std_lower"])
         self.q_orig = torch.stack((x_upper,x_lower),dim=0)
         self.q_to_noise=self.q_orig.unsqueeze(0)
         self.q_orig=self.q_orig.cpu().numpy()
         self._push_forward()
-
-
+        
+        
     def noise_image(self,q_to_noise,t):
         t=torch.tensor([t],dtype=torch.int64).to(device)
         noise=torch.randn_like(q_to_noise).to(denoise_sim.device)
         return noise,model.sqrt_alphas_cumprod.gather(-1,t).reshape(q_to_noise.shape[0],1,1,1)*q_to_noise+model.sqrt_one_minus_alphas_cumprod.gather(-1,t).reshape(q_to_noise.shape[0],1,1,1)*noise
-
-
+    
+        
     def _push_forward(self):
         """ Update variable quantities - the noise field, residual, timestep, MSE """
         self.noise,self.noised=self.noise_image(self.q_to_noise,self.i)
@@ -45,9 +44,9 @@ class DiffusionAnimation():
         self.mse=np.append(self.mse,mse.cpu().numpy())
         self.noise=self.noise.squeeze().cpu().numpy()
         self.noised=self.noised.squeeze().cpu().numpy()
-
+        
         return
-
+    
     def animate(self):
         fig, axs = plt.subplots(2, 4,figsize=(12,5))
         axs[0,0].set_title("Before noise")
@@ -76,62 +75,69 @@ class DiffusionAnimation():
 
         self.ax8=[axs[1][3].plot(1),axs[1][3].plot(1)]
         axs[1][3].set_yscale("log")
-        axs[1][3].set_ylim(3e-5,1e0)
+        axs[1][3].set_ylim(3e-5,1e1)
         axs[1][3].set_xlim(0,self.model.timesteps)
-
+        
         fig.tight_layout()
-
+        
         anim = animation.FuncAnimation(
-                                       fig,
-                                       self.animate_func,
+                                       fig, 
+                                       self.animate_func, 
                                        frames = self.nFrames,
                                        interval = 1000 / self.fps, # in ms
                                        )
         plt.close()
-
-        return HTML(anim.to_html5_video())
-
-
+        
+        if self.savestring:
+            print("saving")
+            # saving to m4 using ffmpeg writer 
+            writervideo = animation.FFMpegWriter(fps=self.fps) 
+            anim.save('%s.mp4' % self.savestring, writer=writervideo) 
+            plt.close()
+        else:
+            return HTML(anim.to_html5_video())
+        
+        
     def animate_func(self,i):
         if i % self.fps == 0:
             print( '.', end ='' )
-
+            
         self.i=i
-
+    
         ## Set image and colorbar for each panel
         image=self.q_orig[0]
         self.ax1.set_array(image)
         self.ax1.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
-
+        
         image=self.q_orig[1]
         self.ax2.set_array(image)
-
+        
         self.ax2.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
-
+        
         image=self.noise[0]
         self.ax3.set_array(image)
         self.ax3.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
-
+        
         image=self.noise[1]
         self.ax4.set_array(image)
         self.ax4.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
-
+        
         image=self.noised[0]
         self.ax5.set_array(image)
         self.ax5.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
-
+        
         image=self.noised[1]
         self.ax6.set_array(image)
         self.ax6.set_clim(-np.max(np.abs(image)), np.max(np.abs(image)))
-
+ 
         self.ax7[0][0].set_xdata(np.array(self.timesx[0:i]))
         self.ax7[0][0].set_ydata(np.array(1-self.model.alphas_cumprod.cpu()[:i]))
-
+        
         self.ax8[0][0].set_xdata(np.array(self.timesx[0:i]))
         self.ax8[0][0].set_ydata(np.array(self.mse[:i]))
 
         self._push_forward()
-
+        
         return
 
 
@@ -142,12 +148,10 @@ def field_to_sims(valid_imgs,denoised,config):
         sim list can then be passed to spectral_diagnostics to plot the spectra """
 
     if config["eddy"]:
-        print("eddying")
         add_config={}
     else:
         ## If system is jet, add jet config to sim so we get the right
         ## stream function inversion in KE calculation
-        print("jetting")
         add_config=torch_model.jet_config
 
     clean_sims=[]
