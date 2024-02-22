@@ -12,7 +12,13 @@ class EmulatorPerformance():
         """ network:  Torch model we want to test. Assuming this is a model for the subgrid forcing
             valid_loader: validation loader from EmulatorDatasetTorch """
         
-        self.network=network
+        
+        if torch.cuda.is_available():
+            self.device="cuda"
+        else:
+            self.device="cpu"
+        
+        self.network=network.to(self.device)
         """ Are we using eddy or jet """
         if network.config["eddy"]:
             self.eddy="eddy"
@@ -23,10 +29,10 @@ class EmulatorPerformance():
         """ For a given field at time i, use the attributed model to push the system forward
             to time i+dt (dt is stored as the time horizon in model config) """
 
-        x=torch.tensor(q_i).float()
+        #x=torch.tensor(q_i,device=self.device)
         ## Map from physical to normalised space using the factors used to train the network
         ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
-        x = self.denorm(x)
+        x = self.denorm(q_i)
         x = x.unsqueeze(0)
 
         x.to
@@ -41,7 +47,7 @@ class EmulatorPerformance():
         q_lower=q_lower-torch.mean(q_lower)
 
         ## Reshape to match pyqg dimensions, and cast to numpy array
-        q_i_dt=torch.cat((q_upper,q_lower)).detach().numpy().astype(np.double)
+        q_i_dt=torch.cat((q_upper,q_lower))
         return q_i_dt+q_i
     
     def get_short_MSEs(self,return_data=False):
@@ -54,14 +60,14 @@ class EmulatorPerformance():
         for aa in range(20):
             mses=np.empty(len(times))
             mses_0=np.empty(len(times))
-            q_i=ds.q[aa,0].to_numpy()
+            q_i=torch.tensor(ds.q[aa,0].to_numpy(),device=self.device,dtype=torch.float32)
             ## Index counter for loss arrays
             cc=0
             init=self.denorm(torch.tensor(ds.q[aa,0].values))
             for bb in range(self.network.config["increment"],ds.q.shape[1],self.network.config["increment"]):
                 q_i_dt=self._get_next_step(q_i)
-                q_i_pred=self.denorm(torch.tensor(q_i_dt))
-                q_i_true=self.denorm(torch.tensor(ds.q[aa,bb].values))
+                q_i_pred=self.denorm(q_i_dt)
+                q_i_true=self.denorm(torch.tensor(ds.q[aa,bb].values,device=self.device))
                 mses[cc]=(criterion(q_i_true,q_i_pred))
                 mses_0[cc]=(criterion(q_i_true,init))
                 q_i=q_i_dt
@@ -85,4 +91,3 @@ class EmulatorPerformance():
         x_lower = transforms.normalise_field(q[1],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
         x = torch.stack((x_upper,x_lower),dim=0)
         return x
-    
