@@ -149,6 +149,31 @@ class ResidualRegressionSystemStd(BaseRegSytem):
         return loss
 
 
+class ResidualRolloutTorch(BaseRegSytem):
+    """ Train an emulator to predict residuals over some time horizon. Can either train to use
+        just the resolved field, or resolved field + subgrid forcing field as input channels """
+    def __init__(self,network,config:dict):
+        super().__init__(network,config)
+        
+    def step(self,batch,kind):
+        """ Evaluate loss function """
+        x_data = batch
+        
+        loss=0
+        
+        for aa in range(0,x_data.shape[1]-1):
+            if aa==0:
+                x_t=x_data[:,0,:,:,:]
+            else:
+                x_t=x_dt+x_t
+            x_dt=self(x_t)
+            loss_dt=self.criterion(x_dt,x_data[:,aa+1,:,:,:]-x_data[:,aa,:,:,:])*np.exp(-aa*self.config["decay_coeff"])
+            self.log(f"{kind}_loss_%d" % aa, loss_dt, on_step=False, on_epoch=True)
+            loss+=loss_dt
+            
+        self.log(f"{kind}_loss", loss, on_step=False, on_epoch=True) 
+        return loss
+
 class ResidualRollout(BaseRegSytem):
     """ Train an emulator to predict residuals over some time horizon. Can either train to use
         just the resolved field, or resolved field + subgrid forcing field as input channels """
