@@ -598,30 +598,30 @@ class EmulatorDatasetTorch(BaseDataset):
         file_path=file_path+"%d_step/all_%s.nc" % (self.increment,self.sim_config)
         data_full=xr.open_dataset(file_path)
         self._get_cuts(data_full)
-        self.q_data=torch.tensor(data_full.q[:,self.cuts].values,dtype=torch.float32)
+        self.x_data=torch.tensor(data_full.q[:,self.cuts].values,dtype=torch.float32)
         ## We are dealing with a fair whack of memory here, so don't hang around for garbage collection
         del(data_full)
 
         ## View [sim index, snapshot index, layer index, nx, ny] -> [sim index, trajectory index, rollout index, layer index, nx, ny]
-        self.q_data=self.q_data.view(self.q_data.shape[0],int(self.q_data.shape[1]/(self.rollout+1)),int(self.rollout+1),self.q_data.shape[-3],self.q_data.shape[-2],self.q_data.shape[-1])
+        self.x_data=self.x_data.view(self.x_data.shape[0],int(self.x_data.shape[1]/(self.rollout+1)),int(self.rollout+1),self.x_data.shape[-3],self.x_data.shape[-2],self.x_data.shape[-1])
         ## Reshape [sim index, trajectory index, rollout index, layer index, nx, ny] -> [batch index, rollout index, layer index, nx, ny]
-        self.q_data=self.q_data.reshape(self.q_data.shape[0]*self.q_data.shape[1],self.q_data.shape[-4],self.q_data.shape[-3],self.q_data.shape[-2],self.q_data.shape[-1])
+        self.x_data=self.x_data.reshape(self.x_data.shape[0]*self.x_data.shape[1],self.x_data.shape[-4],self.x_data.shape[-3],self.x_data.shape[-2],self.x_data.shape[-1])
         
         ## Find normalisation factors
-        self.q_mean_upper,self.q_mean_lower=self.q_data.mean(dim=[0,1,3,4])
-        self.q_std_upper,self.q_std_lower=self.q_data.std(dim=[0,1,3,4])
+        self.q_mean_upper,self.q_mean_lower=self.x_data.mean(dim=[0,1,3,4])
+        self.q_std_upper,self.q_std_lower=self.x_data.std(dim=[0,1,3,4])
         
-        self.len=len(self.q_data)
+        self.len=len(self.x_data)
         ## Subsample datasets if required
         if self.subsample:
-            self._subsample()
+            self.x_data=self.x_data[:self.subsample]
             
         self.train_ratio=train_ratio
         self.valid_ratio=valid_ratio
         self.test_ratio=test_ratio
         self.rng = np.random.default_rng(seed)
 
-        self.len=len(self.q_data)
+        self.len=len(self.x_data)
         ## Generate shuffled list of indices
         self._get_split_indices()
     
@@ -644,7 +644,7 @@ class EmulatorDatasetTorch(BaseDataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         ## Return normalised arrays
-        q_upper=transforms.normalise_field(self.q_data[idx,:,0],self.q_mean_upper,self.q_std_upper)
-        q_lower=transforms.normalise_field(self.q_data[idx,:,1],self.q_mean_lower,self.q_std_lower)
-        q_out=torch.stack((q_upper,q_lower),dim=1)
-        return q_out
+        x_upper=transforms.normalise_field(self.x_data[idx,:,0],self.q_mean_upper,self.q_std_upper)
+        x_lower=transforms.normalise_field(self.x_data[idx,:,1],self.q_mean_lower,self.q_std_lower)
+        x_out=torch.stack((x_upper,x_lower),dim=1)
+        return x_out
