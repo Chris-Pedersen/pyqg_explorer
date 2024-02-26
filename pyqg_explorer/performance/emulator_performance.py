@@ -8,7 +8,7 @@ import xarray as xr
 
 class EmulatorPerformance():
     """ Object to store performance tests relevant to neural emulators """
-    def __init__(self,network):
+    def __init__(self,network,denoiser=None):
         """ network:  Torch model we want to test. Assuming this is a model for the subgrid forcing
             valid_loader: validation loader from EmulatorDatasetTorch """
         
@@ -19,6 +19,9 @@ class EmulatorPerformance():
             self.device="cpu"
         
         self.network=network.to(self.device)
+        self.denoiser=denoiser
+        if self.denoiser:
+            self.denoiser.model.to(self.device)
         """ Are we using eddy or jet """
         if network.config["eddy"]:
             self.eddy="eddy"
@@ -29,25 +32,9 @@ class EmulatorPerformance():
         """ For a given field at time i, use the attributed model to push the system forward
             to time i+dt (dt is stored as the time horizon in model config) """
 
-        #x=torch.tensor(q_i,device=self.device)
-        ## Map from physical to normalised space using the factors used to train the network
-        ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
-        x = self.denorm(q_i)
-        x = x.unsqueeze(0)
+        q_i_dt=self.network(q_i.unsqueeze(0))
+        q_i_dt=q_i_dt.squeeze()
 
-        x.to
-        x=self.network(x)
-
-        ## Map back from normalised space to physical units
-        q_upper=transforms.denormalise_field(x[:,0,:,:],self.network.config["q_mean_upper"],self.network.config["q_std_upper"])
-        q_lower=transforms.denormalise_field(x[:,1,:,:],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
-
-        ## Set zero mean
-        q_upper=q_upper-torch.mean(q_upper)
-        q_lower=q_lower-torch.mean(q_lower)
-
-        ## Reshape to match pyqg dimensions, and cast to numpy array
-        q_i_dt=torch.cat((q_upper,q_lower))
         return q_i_dt+q_i
     
     def get_short_MSEs(self,return_data=False):
@@ -60,22 +47,20 @@ class EmulatorPerformance():
         for aa in range(20):
             mses=np.empty(len(times))
             mses_0=np.empty(len(times))
-            q_i=torch.tensor(ds.q[aa,0].to_numpy(),device=self.device,dtype=torch.float32)
+            q_i=self.normalise(torch.tensor(ds.q[aa,0].to_numpy(),device=self.device,dtype=torch.float32))
             ## Index counter for loss arrays
             cc=0
-            init=self.denorm(torch.tensor(ds.q[aa,0].values))
+            init=self.normalise(torch.tensor(ds.q[aa,0].values,device=self.device))
             for bb in range(self.network.config["increment"],ds.q.shape[1],self.network.config["increment"]):
                 q_i_dt=self._get_next_step(q_i)
-                q_i_pred=self.denorm(q_i_dt)
-                q_i_true=self.denorm(torch.tensor(ds.q[aa,bb].values,device=self.device))
-                mses[cc]=(criterion(q_i_true,q_i_pred))
+                q_i_true=self.normalise(torch.tensor(ds.q[aa,bb].values,device=self.device))
+                mses[cc]=(criterion(q_i_true,q_i_dt))
                 mses_0[cc]=(criterion(q_i_true,init))
                 q_i=q_i_dt
                 cc+=1
                 
-            plt.title("MSE(truth,emulator), for 20 trajectories")
+            plt.title("MSE(truth,emulator) in blue, MSE(truth at t=0, truth at t=i) in red")
             plt.plot(times,mses,color="blue",label="Emulator MSE wrt truth",alpha=0.2)
-
             plt.plot(times,mses_0,color="red",label="True MSE wrt t=0",alpha=0.2)
             plt.yscale("log")
             plt.ylim(1e-3,5e0)
@@ -84,10 +69,11 @@ class EmulatorPerformance():
 
         return fig
 
-    def denorm(self,q):
+    def normalise(self,q):
         ## Map from physical to normalised space using the factors used to train the network
         ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
         x_upper = transforms.normalise_field(q[0],self.network.config["q_mean_upper"],self.network.config["q_std_upper"])
         x_lower = transforms.normalise_field(q[1],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
         x = torch.stack((x_upper,x_lower),dim=0)
         return x
+    
