@@ -49,11 +49,10 @@ class EmulatorPerformance():
             cc=0
             init=self.normalise(torch.tensor(ds.q[aa,0].values,device=self.device))
             for bb in range(self.network.config["increment"],ds.q.shape[1],self.network.config["increment"]):
-                q_i_dt=self._get_next_step(q_i)
+                q_i=self._get_next_step(q_i)
                 q_i_true=self.normalise(torch.tensor(ds.q[aa,bb].values,device=self.device))
-                mses[cc]=(criterion(q_i_true,q_i_dt))
+                mses[cc]=(criterion(q_i_true,q_i))
                 mses_0[cc]=(criterion(q_i_true,init))
-                q_i=q_i_dt
                 cc+=1
                 
             plt.title("MSE(truth,emulator) in blue, MSE(truth at t=0, truth at t=i) in red")
