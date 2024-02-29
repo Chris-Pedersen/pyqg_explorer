@@ -10,12 +10,11 @@ from IPython.display import HTML
 from scipy.stats import pearsonr
 
 
-class EmulatorPerformance():
+class EmulatorMSE():
     """ Object to store performance tests relevant to neural emulators """
     def __init__(self,network):
         """ network:  Torch model we want to test. Assuming this is a model for the subgrid forcing
             valid_loader: validation loader from EmulatorDatasetTorch """
-        
         
         if torch.cuda.is_available():
             self.device="cuda"
@@ -66,7 +65,7 @@ class EmulatorPerformance():
             plt.ylim(1e-3,5e0)
             plt.xlabel("timestep")
             plt.ylabel("MSE")
-
+        self.q_pred=q_i
         return fig
 
     def normalise(self,q):
@@ -77,7 +76,7 @@ class EmulatorPerformance():
         x = torch.stack((x_upper,x_lower),dim=0)
         return x
 
-class DenoiserPerformance():
+class DenoiserMSE():
     """ Object to store performance tests relevant to neural emulators """
     def __init__(self,network,denoiser,denoise_timestep=10,denoise_delay=500,denoise_interval=5):
         """ network:  Torch model we want to test. Assuming this is a model for the subgrid forcing
