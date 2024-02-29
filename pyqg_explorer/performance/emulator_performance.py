@@ -27,7 +27,11 @@ class EmulatorMSE():
             self.eddy="eddy"
         else:
             self.eddy="jet"
+            
+        self.simlist_pred=[]
+        self.simlist_true=[]
         
+    @torch.no_grad
     def _get_next_step(self,q_i):
         """ For a given field at time i, use the attributed model to push the system forward
             to time i+dt (dt is stored as the time horizon in model config) """
@@ -38,9 +42,9 @@ class EmulatorMSE():
         return q_i_dt+q_i
     
     def get_short_MSEs(self,return_data=False):
-        ds=xr.load_dataset("/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/torch_%s_1k.nc" % self.eddy)
-        times=np.arange(self.network.config["increment"],ds.q.shape[1],self.network.config["increment"])
-
+        ds=xr.load_dataset("/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/torch_%s_%sk.nc" % (self.eddy,self.network.config["increment"]))
+        times=np.arange(self.network.config["increment"],ds.q.shape[1]*self.network.config["increment"],self.network.config["increment"])
+        
         criterion=nn.MSELoss()
         fig=plt.figure()
         ## This can all be parallelised to make use of GPU..
@@ -51,21 +55,28 @@ class EmulatorMSE():
             ## Index counter for loss arrays
             cc=0
             init=self.normalise(torch.tensor(ds.q[aa,0].values,device=self.device))
-            for bb in range(self.network.config["increment"],ds.q.shape[1],self.network.config["increment"]):
+            for bb in range(1,ds.q.shape[1]):
                 q_i=self._get_next_step(q_i)
                 q_i_true=self.normalise(torch.tensor(ds.q[aa,bb].values,device=self.device))
-                mses[cc]=(criterion(q_i_true,q_i))
-                mses_0[cc]=(criterion(q_i_true,init))
-                cc+=1
+                mses[bb-1]=(criterion(q_i_true,q_i))
+                mses_0[bb-1]=(criterion(q_i_true,init))
+                
+            #print(mses.shape)
                 
             plt.title("MSE(truth,emulator) in blue, MSE(truth at t=0, truth at t=i) in red")
             plt.plot(times,mses,color="blue",label="Emulator MSE wrt truth",alpha=0.2)
             plt.plot(times,mses_0,color="red",label="True MSE wrt t=0",alpha=0.2)
             plt.yscale("log")
-            plt.ylim(1e-3,5e0)
+            plt.ylim(1e-3,9e0)
             plt.xlabel("timestep")
             plt.ylabel("MSE")
-        self.q_pred=q_i
+
+            #sim=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky())
+            #sim.set_q1q2(self.denormalise(q_i))
+            #self.simlist_pred.append(sim)
+            #sim=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky())
+            #sim.set_q1q2(ds.q[aa,bb].values)
+            #self.simlist_true.append(sim)
         return fig
 
     def normalise(self,q):
@@ -73,6 +84,14 @@ class EmulatorMSE():
         ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
         x_upper = transforms.normalise_field(q[0],self.network.config["q_mean_upper"],self.network.config["q_std_upper"])
         x_lower = transforms.normalise_field(q[1],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
+        x = torch.stack((x_upper,x_lower),dim=0)
+        return x
+    
+    def denormalise(self,q):
+        ## Map from physical to normalised space using the factors used to train the network
+        ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
+        x_upper = transforms.denormalise_field(q[0],self.network.config["q_mean_upper"],self.network.config["q_std_upper"])
+        x_lower = transforms.denormalise_field(q[1],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
         x = torch.stack((x_upper,x_lower),dim=0)
         return x
 
