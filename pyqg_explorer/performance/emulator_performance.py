@@ -119,6 +119,9 @@ class DenoiserMSE():
             self.eddy="eddy"
         else:
             self.eddy="jet"
+        self.simlist_pred=[]
+        self.simlist_true=[]
+        self.simlist_dn=[]
         
     @torch.no_grad
     def _get_next_step(self,q_i):
@@ -136,21 +139,32 @@ class DenoiserMSE():
         
         criterion=nn.MSELoss()
         fig=plt.figure()
+        plt.figure(figsize=(16,5))
         ## This can all be parallelised to make use of GPU..
         for aa in range(20):
             mses=np.empty(len(times))
             mses_0=np.empty(len(times))
             mses_dn=np.empty(len(times))
+            
+            corr=np.empty(len(times))
+            corr_0=np.empty(len(times))
+            corr_dn=np.empty(len(times))
+            
+            cos=np.empty(len(times))
+            cos_0=np.empty(len(times))
+            cos_dn=np.empty(len(times))
+            
             q_i=self.normalise(torch.tensor(ds.q[aa,0].to_numpy(),device=self.device,dtype=torch.float32))
             q_i_dn=q_i
             ## Index counter for loss arrays
             cc=0
-            init=self.normalise(torch.tensor(ds.q[aa,0].values,device=self.device))
+            init=self.normalise(torch.tensor(ds.q[aa,0].values,device=self.device,dtype=torch.float32))
+            
             
             ## Bool to keep track of when to apply denoiser
             should_denoise=False
             for bb in range(1,ds.q.shape[1]):
-                q_i_true=self.normalise(torch.tensor(ds.q[aa,bb].values,device=self.device))
+                q_i_true=self.normalise(torch.tensor(ds.q[aa,bb].values,device=self.device,dtype=torch.float32))
                 ## Emulator rollout
                 q_i=self._get_next_step(q_i)
                 ## Denoised emulator rollout
@@ -163,19 +177,50 @@ class DenoiserMSE():
                     q_i_dn=q_i_dn.squeeze()
                 
                 ## Calcluate MSEs
-                mses_dn[bb-1]=(criterion(q_i_true,q_i_dn))
                 mses[bb-1]=(criterion(q_i_true,q_i))
                 mses_0[bb-1]=(criterion(q_i_true,init))
+                mses_dn[bb-1]=(criterion(q_i_true,q_i_dn))
+                
+                ## Calculate correlations
+                corr[bb-1]=(pearsonr(q_i_true.cpu().numpy().flatten(),q_i.cpu().numpy().flatten())[0])
+                corr_0[bb-1]=(pearsonr(q_i_true.cpu().numpy().flatten(),init.cpu().numpy().flatten())[0])
+                corr_dn[bb-1]=(pearsonr(q_i_true.cpu().numpy().flatten(),q_i_dn.cpu().numpy().flatten())[0])
+                
+                ## Cosine similarity
+                cos[bb-1]=torch.dot(q_i_true.flatten(),q_i.flatten())/(torch.norm(q_i_true)*torch.norm(q_i))
+                cos_0[bb-1]=torch.dot(q_i_true.flatten(),init.flatten())/(torch.norm(q_i_true)*torch.norm(init))
+                cos_dn[bb-1]=torch.dot(q_i_true.flatten(),q_i_dn.flatten())/(torch.norm(q_i_true)*torch.norm(q_i_dn))
+                
                 cc+=1
                 
-            plt.title("MSE(truth,emulator) in blue, MSE(truth at t=0, truth at t=i) in red")
-            plt.plot(times,mses,color="blue",label="Emulator MSE wrt truth",alpha=0.2)
-            plt.plot(times,mses_0,color="red",label="True MSE wrt t=0",alpha=0.2)
-            plt.plot(times,mses_dn,color="orange",label="True MSE wrt t=0",alpha=0.4)
+            plt.subplot(1,3,1)
+            plt.title("Delay=%d, Timestep=%d, Interval=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
+            plt.plot(times,mses,color="black",label="Emulator MSE wrt truth",alpha=0.2)
+            plt.plot(times,mses_0,color="blue",label="True MSE wrt t=0",alpha=0.2)
+            plt.plot(times,mses_dn,color="red",label="True MSE wrt t=0",alpha=0.4)
             plt.yscale("log")
-            plt.ylim(1e-3,9e0)
+            plt.ylim(1e-3,2e1)
             plt.xlabel("timestep")
             plt.ylabel("MSE")
+            plt.subplot(1,3,2)
+            plt.plot(times,corr,color="black",label="Emulator MSE wrt truth",alpha=0.2)
+            plt.plot(times,corr_0,color="blue",label="True MSE wrt t=0",alpha=0.2)
+            plt.plot(times,corr_dn,color="red",label="True MSE wrt t=0",alpha=0.4)
+            
+            plt.subplot(1,3,3)
+            plt.plot(times,cos,color="black",label="Emulator MSE wrt truth",alpha=0.2)
+            plt.plot(times,cos_0,color="blue",label="True MSE wrt t=0",alpha=0.2)
+            plt.plot(times,cos_dn,color="red",label="True MSE wrt t=0",alpha=0.4)
+            
+            sim=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky())
+            sim.set_q1q2(self.denormalise(q_i))
+            self.simlist_pred.append(sim)
+            sim=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky())
+            sim.set_q1q2(ds.q[aa,bb].values)
+            self.simlist_true.append(sim)
+            sim=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky())
+            sim.set_q1q2((self.denormalise(q_i_dn)))
+            self.simlist_dn.append(sim)
 
         return fig
 
@@ -194,6 +239,7 @@ class DenoiserMSE():
         x_lower = transforms.denormalise_field(q[1],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
         x = torch.stack((x_upper,x_lower),dim=0)
         return x
+
 class EmulatorAnimation():
     def __init__(self,q_ds,model,fps=10,nSteps=1000,normalise=True):
         self.q_ds=q_ds
