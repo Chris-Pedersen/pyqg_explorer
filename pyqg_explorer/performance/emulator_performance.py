@@ -133,13 +133,14 @@ class DenoiserMSE():
 
         return q_i_dt+q_i
     
-    def get_short_MSEs(self,return_data=False):
+    def test_denoiser(self):
         ds=xr.load_dataset("/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/torch_%s_%sk.nc" % (self.eddy,self.network.config["increment"]))
         times=np.arange(self.network.config["increment"],ds.q.shape[1]*self.network.config["increment"],self.network.config["increment"])
         
         criterion=nn.MSELoss()
         fig=plt.figure()
         plt.figure(figsize=(16,5))
+        plt.suptitle("Delay=%d, Timestep=%d, Interval=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
         ## This can all be parallelised to make use of GPU..
         for aa in range(20):
             mses=np.empty(len(times))
@@ -185,32 +186,29 @@ class DenoiserMSE():
                 corr[bb-1]=(pearsonr(q_i_true.cpu().numpy().flatten(),q_i.cpu().numpy().flatten())[0])
                 corr_0[bb-1]=(pearsonr(q_i_true.cpu().numpy().flatten(),init.cpu().numpy().flatten())[0])
                 corr_dn[bb-1]=(pearsonr(q_i_true.cpu().numpy().flatten(),q_i_dn.cpu().numpy().flatten())[0])
-                
-                ## Cosine similarity
-                cos[bb-1]=torch.dot(q_i_true.flatten(),q_i.flatten())/(torch.norm(q_i_true)*torch.norm(q_i))
-                cos_0[bb-1]=torch.dot(q_i_true.flatten(),init.flatten())/(torch.norm(q_i_true)*torch.norm(init))
-                cos_dn[bb-1]=torch.dot(q_i_true.flatten(),q_i_dn.flatten())/(torch.norm(q_i_true)*torch.norm(q_i_dn))
-                
                 cc+=1
                 
             plt.subplot(1,3,1)
-            plt.title("Delay=%d, Timestep=%d, Interval=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
+            plt.title("MSE")
             plt.plot(times,mses,color="black",label="Emulator MSE wrt truth",alpha=0.2)
             plt.plot(times,mses_0,color="blue",label="True MSE wrt t=0",alpha=0.2)
             plt.plot(times,mses_dn,color="red",label="True MSE wrt t=0",alpha=0.4)
+            plt.xlabel("timestep")
             plt.yscale("log")
             plt.ylim(1e-3,2e1)
             plt.xlabel("timestep")
             plt.ylabel("MSE")
             plt.subplot(1,3,2)
+            plt.title("Correlation")
             plt.plot(times,corr,color="black",label="Emulator MSE wrt truth",alpha=0.2)
             plt.plot(times,corr_0,color="blue",label="True MSE wrt t=0",alpha=0.2)
             plt.plot(times,corr_dn,color="red",label="True MSE wrt t=0",alpha=0.4)
+            plt.xlabel("timestep")
             
             plt.subplot(1,3,3)
-            plt.plot(times,cos,color="black",label="Emulator MSE wrt truth",alpha=0.2)
-            plt.plot(times,cos_0,color="blue",label="True MSE wrt t=0",alpha=0.2)
-            plt.plot(times,cos_dn,color="red",label="True MSE wrt t=0",alpha=0.4)
+            plt.title("Correlation difference")
+            plt.plot(times,corr_dn-corr,color="black",label="Emulator MSE wrt truth",alpha=0.2)
+            plt.xlabel("timestep")
             
             sim=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky())
             sim.set_q1q2(self.denormalise(q_i))
@@ -239,6 +237,84 @@ class DenoiserMSE():
         x_lower = transforms.denormalise_field(q[1],self.network.config["q_mean_lower"],self.network.config["q_std_lower"])
         x = torch.stack((x_upper,x_lower),dim=0)
         return x
+    
+    def spectral_diagnostics(self):
+        """ Take a true sim, and some denoised sims. Plot spectra. We are just assuming the first
+            set of sims are truth, which we'll plot in black, and the second are some kind of comparison:
+            noised or denoised, which we'll plot in red """
+
+        fig, axs = plt.subplots(2, 3,figsize=(10,5))
+
+
+        axs[0,0].set_title("KE spectrum")
+
+        axs[0,1].set_title("Enstrophy spectrum")
+
+        axs[0,2].set_title("q pdf")
+
+        plt.suptitle("Delay=%d, Timestep=%d, Interval=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
+        ## Set ylimits for eddy spectra
+        axs[0,0].set_ylim(1e-3,5e3)
+        axs[1,0].set_ylim(1e-3,1e2)
+        axs[0,1].set_ylim(5e-10,6e-5)
+        axs[1,1].set_ylim(8e-11,1e-6)
+
+        for aa,sim in enumerate(self.simlist_true):
+            kes=sim.get_KE_ispec()
+            ens=sim.get_enstrophy_ispec()
+
+            ## Kinetic energy spectra
+            axs[0,0].loglog(sim.k1d_plot,kes[0],color="black",alpha=0.3)
+            axs[1,0].loglog(sim.k1d_plot,kes[1],color="black",alpha=0.3)
+
+            ## Enstrophy spectra
+            axs[0,1].loglog(sim.k1d_plot,ens[0],color="black",alpha=0.3)
+            axs[1,1].loglog(sim.k1d_plot,ens[1],color="black",alpha=0.3)
+
+            ux,uy=util.PDF_histogram(sim.q[0].cpu().numpy().flatten())
+            axs[0,2].semilogy(ux,uy,color="black",alpha=0.3)
+
+            vx,vy=util.PDF_histogram(sim.q[1].cpu().numpy().flatten())
+            axs[1,2].semilogy(vx,vy,color="black",alpha=0.3)
+
+        for aa,sim in enumerate(self.simlist_pred):
+            kes=sim.get_KE_ispec()
+            ens=sim.get_enstrophy_ispec()
+
+            ## Kinetic energy spectra
+            axs[0,0].loglog(sim.k1d_plot,kes[0],color="blue",alpha=0.3)
+            axs[1,0].loglog(sim.k1d_plot,kes[1],color="blue",alpha=0.3)
+
+            ## Enstrophy spectra
+            axs[0,1].loglog(sim.k1d_plot,ens[0],color="blue",alpha=0.3)
+            axs[1,1].loglog(sim.k1d_plot,ens[1],color="blue",alpha=0.3)
+
+            ux,uy=util.PDF_histogram(sim.q[0].cpu().numpy().flatten())
+            axs[0,2].semilogy(ux,uy,color="blue",alpha=0.3)
+
+            vx,vy=util.PDF_histogram(sim.q[1].cpu().numpy().flatten())
+            axs[1,2].semilogy(vx,vy,color="blue",alpha=0.3)
+
+        for aa,sim in enumerate(self.simlist_dn):
+            kes=sim.get_KE_ispec()
+            ens=sim.get_enstrophy_ispec()
+
+            ## Kinetic energy spectra
+            axs[0,0].loglog(sim.k1d_plot,kes[0],color="red",alpha=0.3)
+            axs[1,0].loglog(sim.k1d_plot,kes[1],color="red",alpha=0.3)
+
+            ## Enstrophy spectra
+            axs[0,1].loglog(sim.k1d_plot,ens[0],color="red",alpha=0.3)
+            axs[1,1].loglog(sim.k1d_plot,ens[1],color="red",alpha=0.3)
+
+            ux,uy=util.PDF_histogram(sim.q[0].cpu().numpy().flatten())
+            axs[0,2].semilogy(ux,uy,color="red",alpha=0.3)
+
+            vx,vy=util.PDF_histogram(sim.q[1].cpu().numpy().flatten())
+            axs[1,2].semilogy(vx,vy,color="red",alpha=0.3)
+
+        return fig
+        
 
 class EmulatorAnimation():
     def __init__(self,q_ds,model,fps=10,nSteps=1000,normalise=True):
