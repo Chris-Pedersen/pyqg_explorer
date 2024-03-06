@@ -334,6 +334,38 @@ class DenoiserMSE():
 
         return fig
 
+    def plot_fields(self,field_num=0):
+        """ For a given sim, at the end of whatever number of passes we are testing, plot
+            the true, emulated, and denoised fields """
+            
+        fig=plt.figure(figsize=(12,7))
+        plt.suptitle("Delay=%d, Timestep=%d, Interval=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
+        plt.subplot(2,3,1)
+        plt.title("True")
+        plt.imshow(self.simlist_true[0].q[0].cpu(),cmap=cmocean.cm.balance)
+        plt.colorbar()
+        plt.subplot(2,3,2)
+        plt.title("Emulator")
+        plt.imshow(self.simlist_pred[0].q[0].cpu(),cmap=cmocean.cm.balance)
+        plt.colorbar()
+        plt.subplot(2,3,3)
+        plt.title("Emulator denoised")
+        plt.imshow(self.simlist_dn[0].q[0].cpu(),cmap=cmocean.cm.balance)
+        plt.colorbar()
+
+        plt.subplot(2,3,4)
+        plt.imshow(self.simlist_true[0].q[1].cpu(),cmap=cmocean.cm.balance)
+        plt.colorbar()
+        plt.subplot(2,3,5)
+        plt.imshow(self.simlist_pred[0].q[1].cpu(),cmap=cmocean.cm.balance)
+        plt.colorbar()
+        plt.subplot(2,3,6)
+        plt.imshow(self.simlist_dn[0].q[1].cpu(),cmap=cmocean.cm.balance)
+        plt.colorbar()
+
+        return fig
+
+
 class EmulatorAnimation():
     def __init__(self,q_ds,model,fps=10,nSteps=1000,normalise=True):
         self.q_ds=q_ds
