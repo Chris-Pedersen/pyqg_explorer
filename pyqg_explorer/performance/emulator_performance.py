@@ -101,7 +101,7 @@ class EmulatorMSE():
 
 class DenoiserMSE():
     """ Object to store performance tests relevant to neural emulators """
-    def __init__(self,network,denoiser,denoise_timestep=10,denoise_delay=500,denoise_interval=5,save=True,path="/scratch/cp3759/pyqg_data/plots/denoiser_plots"):
+    def __init__(self,network,denoiser,denoise_timestep=10,denoise_delay=500,denoise_interval=5,save=True,num_passes=1000,path="/scratch/cp3759/pyqg_data/plots/denoiser_plots"):
         """ network:  Torch model we want to test. Assuming this is a model for the subgrid forcing
             valid_loader: validation loader from EmulatorDatasetTorch """
         
@@ -111,13 +111,15 @@ class DenoiserMSE():
         else:
             self.device="cpu"
         
-        self.path=path
-        self.save=save
         self.network=network.to(self.device)
         self.denoiser=denoiser
         self.denoise_timestep=denoise_timestep
         self.denoise_delay=denoise_delay
         self.denoise_interval=denoise_interval
+        self.num_passes=num_passes
+        self.path=path
+        self.save=save
+
         self.denoiser.to(self.device)
         """ Are we using eddy or jet """
         if network.config["eddy"]:
@@ -140,7 +142,7 @@ class DenoiserMSE():
     
     def test_denoiser(self):
         ds=xr.load_dataset("/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/torch_%s_%sk.nc" % (self.eddy,self.network.config["increment"]))
-        times=np.arange(self.network.config["increment"],ds.q.shape[1]*self.network.config["increment"],self.network.config["increment"])
+        times=np.arange(self.network.config["increment"],self.num_passes*self.network.config["increment"],self.network.config["increment"])
         
         criterion=nn.MSELoss()
         fig=plt.figure()
@@ -169,7 +171,7 @@ class DenoiserMSE():
             
             ## Bool to keep track of when to apply denoiser
             should_denoise=False
-            for bb in range(1,ds.q.shape[1]):
+            for bb in range(1,self.num_passes):
                 q_i_true=self.normalise(torch.tensor(ds.q[aa,bb].values,device=self.device,dtype=torch.float32))
                 ## Emulator rollout
                 q_i=self._get_next_step(q_i)
