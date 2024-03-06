@@ -8,6 +8,9 @@ import cmocean
 import matplotlib.animation as animation
 from IPython.display import HTML
 from scipy.stats import pearsonr
+import torch_qg.model as torch_model
+import torch_qg.parameterizations as torch_param
+import torch_qg.util as util
 
 
 class EmulatorMSE():
@@ -98,7 +101,7 @@ class EmulatorMSE():
 
 class DenoiserMSE():
     """ Object to store performance tests relevant to neural emulators """
-    def __init__(self,network,denoiser,denoise_timestep=10,denoise_delay=500,denoise_interval=5,path="/scratch/cp3759/pyqg_data/plots/denoiser_plots"):
+    def __init__(self,network,denoiser,denoise_timestep=10,denoise_delay=500,denoise_interval=5,save=True,path="/scratch/cp3759/pyqg_data/plots/denoiser_plots"):
         """ network:  Torch model we want to test. Assuming this is a model for the subgrid forcing
             valid_loader: validation loader from EmulatorDatasetTorch """
         
@@ -109,6 +112,7 @@ class DenoiserMSE():
             self.device="cpu"
         
         self.path=path
+        self.save=save
         self.network=network.to(self.device)
         self.denoiser=denoiser
         self.denoise_timestep=denoise_timestep
@@ -220,8 +224,8 @@ class DenoiserMSE():
             sim=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky())
             sim.set_q1q2((self.denormalise(q_i_dn)))
             self.simlist_dn.append(sim)
-            
-        plt.savefig(self.path+"/delay%d_timestep%d_interval%d_trajectory.pdf" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
+        if self.save:   
+            plt.savefig(self.path+"/delay%d_timestep%d_interval%d_trajectory.pdf" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
 
         return fig
 
@@ -316,7 +320,8 @@ class DenoiserMSE():
             vx,vy=util.PDF_histogram(sim.q[1].cpu().numpy().flatten())
             axs[1,2].semilogy(vx,vy,color="red",alpha=0.3)
             
-        plt.savefig(self.path+"/delay%d_timestep%d_interval%d_spectra.pdf" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
+        if self.save:
+            plt.savefig(self.path+"/delay%d_timestep%d_interval%d_spectra.pdf" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
 
         return fig
 
