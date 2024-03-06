@@ -101,7 +101,11 @@ class EmulatorMSE():
 
 class DenoiserMSE():
     """ Object to store performance tests relevant to neural emulators """
-    def __init__(self,network,denoiser,denoise_timestep=10,denoise_delay=500,denoise_interval=5,save=True,num_passes=1000,path="/scratch/cp3759/pyqg_data/plots/denoiser_plots"):
+    def __init__(self,network,denoiser,denoise_timestep=10,denoise_delay=500,denoise_interval=5,
+                            save=True,
+                            num_passes=1000,
+                            zeromean=True,
+                            path="/scratch/cp3759/pyqg_data/plots/denoiser_plots"):
         """ network:  Torch model we want to test. Assuming this is a model for the subgrid forcing
             valid_loader: validation loader from EmulatorDatasetTorch """
         
@@ -117,6 +121,7 @@ class DenoiserMSE():
         self.denoise_delay=denoise_delay
         self.denoise_interval=denoise_interval
         self.num_passes=num_passes
+        self.zeromean=zeromean
         self.path=path
         self.save=save
 
@@ -137,6 +142,11 @@ class DenoiserMSE():
 
         q_i_dt=self.network(q_i.unsqueeze(0))
         q_i_dt=q_i_dt.squeeze()
+
+        if self.zeromean:
+            means=q_i_dt.mean(axis=(1,2))
+            q_i_dt[0]-=means[0]
+            q_i_dt[1]-=means[1]
 
         return q_i_dt+q_i
     
@@ -337,7 +347,7 @@ class DenoiserMSE():
     def plot_fields(self,field_num=0):
         """ For a given sim, at the end of whatever number of passes we are testing, plot
             the true, emulated, and denoised fields """
-            
+
         fig=plt.figure(figsize=(12,7))
         plt.suptitle("Delay=%d, Timestep=%d, Interval=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
         plt.subplot(2,3,1)
