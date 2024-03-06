@@ -144,7 +144,7 @@ class DenoiserMSE():
         
         criterion=nn.MSELoss()
         fig=plt.figure()
-        plt.figure(figsize=(16,5))
+        plt.figure(figsize=(18,5))
         plt.suptitle("Delay=%d, Timestep=%d, Interval=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
         ## This can all be parallelised to make use of GPU..
         for aa in range(20):
@@ -193,26 +193,33 @@ class DenoiserMSE():
                 corr_dn[bb-1]=(pearsonr(q_i_true.cpu().numpy().flatten(),q_i_dn.cpu().numpy().flatten())[0])
                 cc+=1
                 
-            plt.subplot(1,3,1)
+            plt.subplot(1,4,1)
             plt.title("MSE")
-            plt.plot(times,mses,color="black",label="Emulator MSE wrt truth",alpha=0.2)
-            plt.plot(times,mses_0,color="blue",label="True MSE wrt t=0",alpha=0.2)
-            plt.plot(times,mses_dn,color="red",label="True MSE wrt t=0",alpha=0.4)
+            plt.plot(times,mses,color="black",alpha=0.2)
+            plt.plot(times,mses_0,color="blue",alpha=0.2)
+            plt.plot(times,mses_dn,color="red",alpha=0.4)
             plt.xlabel("timestep")
             plt.yscale("log")
             plt.ylim(1e-3,2e1)
             plt.xlabel("timestep")
             plt.ylabel("MSE")
-            plt.subplot(1,3,2)
-            plt.title("Correlation")
-            plt.plot(times,corr,color="black",label="Emulator MSE wrt truth",alpha=0.2)
-            plt.plot(times,corr_0,color="blue",label="True MSE wrt t=0",alpha=0.2)
-            plt.plot(times,corr_dn,color="red",label="True MSE wrt t=0",alpha=0.4)
-            plt.xlabel("timestep")
             
-            plt.subplot(1,3,3)
+            plt.subplot(1,4,2)
+            plt.title("MSE difference")
+            plt.plot(times,mses_dn-mses,color="black",alpha=0.2)
+            plt.xlabel("timestep")
+            #plt.yscale("log")
+
+            plt.subplot(1,4,3)
+            plt.title("Correlation")
+            plt.plot(times,corr,color="black",alpha=0.2)
+            plt.plot(times,corr_0,color="blue",alpha=0.2)
+            plt.plot(times,corr_dn,color="red",alpha=0.4)
+            plt.xlabel("timestep")
+
+            plt.subplot(1,4,4)
             plt.title("Correlation difference")
-            plt.plot(times,corr_dn-corr,color="black",label="Emulator MSE wrt truth",alpha=0.2)
+            plt.plot(times,corr_dn-corr,color="black",alpha=0.2)
             plt.xlabel("timestep")
             
             sim=torch_model.PseudoSpectralModel(nx=64,dt=3600,dealias=True,parameterization=torch_param.Smagorinsky())
