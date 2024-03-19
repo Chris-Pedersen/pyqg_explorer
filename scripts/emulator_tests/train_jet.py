@@ -83,9 +83,9 @@ def train(rollout,subsample=None):
 
     wandb.finish()
 
-rollouts=[2,3,4,5,6]
+rollouts=[2,4,6]
 
 for rollout in rollouts:
-    train(rollout,subsample=30000)
+    train(rollout,subsample=70000)
 
 print("Finito")
