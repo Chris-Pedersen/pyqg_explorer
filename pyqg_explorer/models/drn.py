@@ -2,13 +2,13 @@ import torch.nn as nn
 
 def process_block(latent_channels):
     """ Processor block, with dilated CNNs """
-    process_block=nn.Sequential(nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=1),nn.ReLU(),
-                              nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=2),nn.ReLU(),
-                              nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=4),nn.ReLU(),
-                              nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=8),nn.ReLU(),
-                              nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=4),nn.ReLU(),
-                              nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=2),nn.ReLU(),
-                              nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=1),nn.ReLU())
+    process_block=nn.Sequential(nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=1),nn.BatchNorm2d(latent_channels),nn.ReLU(),
+                                nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=2),nn.BatchNorm2d(latent_channels),nn.ReLU(),
+                                nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=4),nn.BatchNorm2d(latent_channels),nn.ReLU(),
+                                nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=8),nn.BatchNorm2d(latent_channels),nn.ReLU(),
+                                nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=4),nn.BatchNorm2d(latent_channels),nn.ReLU(),
+                                nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=2),nn.BatchNorm2d(latent_channels),nn.ReLU(),
+                                nn.Conv2d(latent_channels,latent_channels,kernel_size=3,stride=1,padding="same",padding_mode='circular',dilation=1),nn.BatchNorm2d(latent_channels),nn.ReLU())
                               
     return process_block
     
