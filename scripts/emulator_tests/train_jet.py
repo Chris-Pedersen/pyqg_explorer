@@ -10,6 +10,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 import pyqg_explorer.dataset.forcing_dataset as forcing_dataset
 import pyqg_explorer.systems.regression_systems as reg_sys
 import pyqg_explorer.models.fcnn as fcnn
+import pyqg_explorer.models.unet as unet
 import pyqg_explorer.performance.emulator_performance as perf
 
 import numpy as np
@@ -25,6 +26,12 @@ def train(rollout,subsample=None):
     config["batch_size"]=128
     config["subsample"]=subsample
     config["eddy"]=False
+    ## If using the unet we use for diffusion
+    ## need to add time parameters
+    config["dim_mults"]=[2,4]
+    config["base_dim"]=32
+    config["timesteps"]=2
+    config["time_embedding_dim"]=2
 
     test_dataset=forcing_dataset.EmulatorDatasetTorch(config["increment"],config["rollout"],subsample=config["subsample"])
 
@@ -54,7 +61,8 @@ def train(rollout,subsample=None):
     config["save_path"]=wandb.run.dir
     config["wandb_url"]=wandb.run.get_url()
 
-    model=fcnn.FCNN(config)
+    model=unet.Unet(config)
+    #model=fcnn.FCNN(config)
 
     wandb.config["cnn learnable parameters"]=sum(p.numel() for p in model.parameters())
     wandb.watch(model, log_freq=1)
@@ -74,7 +82,7 @@ def train(rollout,subsample=None):
 
     trainer.fit(system, train_loader, valid_loader)
 
-    emu_perf=perf.EmulatorPerformance(model)
+    emu_perf=perf.EmulatorMSE(model)
     fig_mse=emu_perf.get_short_MSEs()
     figure_mse=wandb.Image(fig_mse)
     wandb.log({"Short MSE": figure_mse})
@@ -83,7 +91,7 @@ def train(rollout,subsample=None):
 
     wandb.finish()
 
-rollouts=[2,4,6]
+rollouts=[1,2,4,6]
 
 for rollout in rollouts:
     train(rollout,subsample=70000)
