@@ -11,6 +11,7 @@ import pyqg_explorer.dataset.forcing_dataset as forcing_dataset
 import pyqg_explorer.systems.regression_systems as reg_sys
 import pyqg_explorer.models.fcnn as fcnn
 import pyqg_explorer.models.unet as unet
+import pyqg_explorer.models.drn as drn
 import pyqg_explorer.performance.emulator_performance as perf
 
 import numpy as np
@@ -22,18 +23,19 @@ def train(rollout,subsample=None):
     config["epochs"]=120
     config["increment"]=5
     config["rollout"]=rollout
-    config["decay_coeff"]=0.2
     config["batch_size"]=128
     config["subsample"]=subsample
     config["eddy"]=True
     ## If using the unet we use for diffusion
     ## need to add time parameters
-    config["dim_mults"]=[2,4]
-    config["base_dim"]=32
-    config["timesteps"]=2
-    config["time_embedding_dim"]=2
+    config["arch"]="DRN"
+    config["latent_channels"]=48
+    #config["dim_mults"]=[2,4]
+    #config["base_dim"]=32
+    #config["timesteps"]=2
+    #config["time_embedding_dim"]=2
 
-    test_dataset=forcing_dataset.EmulatorDatasetTorch(config["increment"],config["rollout"],subsample=config["subsample"])
+    test_dataset=forcing_dataset.EmulatorDatasetTorch(config["increment"],config["rollout"],eddy=config["eddy"],subsample=config["subsample"])
 
     ## Need to save renormalisation factors for when the CNN is plugged into pyqg
     config["q_mean_upper"]=test_dataset.q_mean_upper
@@ -61,7 +63,8 @@ def train(rollout,subsample=None):
     config["save_path"]=wandb.run.dir
     config["wandb_url"]=wandb.run.get_url()
 
-    model=unet.Unet(config)
+    #model=unet.Unet(config)
+    model=drn.DRN(config)
     #model=fcnn.FCNN(config)
 
     wandb.config["cnn learnable parameters"]=sum(p.numel() for p in model.parameters())
@@ -77,7 +80,8 @@ def train(rollout,subsample=None):
         max_epochs=config["epochs"],
         logger=logger,
         enable_progress_bar=False,
-        callbacks=[lr_monitor]
+        callbacks=[lr_monitor],
+        enable_checkpointing=False
         )
 
     trainer.fit(system, train_loader, valid_loader)
@@ -91,7 +95,7 @@ def train(rollout,subsample=None):
 
     wandb.finish()
 
-rollouts=[1,2,4,6]
+rollouts=[1,4,6]
 
 for rollout in rollouts:
     train(rollout,subsample=70000)

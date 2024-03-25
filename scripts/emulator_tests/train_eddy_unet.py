@@ -11,7 +11,6 @@ import pyqg_explorer.dataset.forcing_dataset as forcing_dataset
 import pyqg_explorer.systems.regression_systems as reg_sys
 import pyqg_explorer.models.fcnn as fcnn
 import pyqg_explorer.models.unet as unet
-import pyqg_explorer.models.drn as drn
 import pyqg_explorer.performance.emulator_performance as perf
 
 import numpy as np
@@ -26,15 +25,15 @@ def train(rollout,subsample=None):
     config["decay_coeff"]=0.2
     config["batch_size"]=128
     config["subsample"]=subsample
-    config["eddy"]=False
+    config["eddy"]=True
     ## If using the unet we use for diffusion
     ## need to add time parameters
-    config["arch"]="DRN"
-    config["latent_channels"]=48
-    #config["dim_mults"]=[2,4]
-    #config["base_dim"]=32
-    #config["timesteps"]=2
-    #config["time_embedding_dim"]=2
+    config["arch"]="Unet"
+    #config["latent_channels"]=48
+    config["dim_mults"]=[2,4]
+    config["base_dim"]=32
+    config["timesteps"]=2
+    config["time_embedding_dim"]=2
 
     test_dataset=forcing_dataset.EmulatorDatasetTorch(config["increment"],config["rollout"],eddy=config["eddy"],subsample=config["subsample"])
 
@@ -64,8 +63,8 @@ def train(rollout,subsample=None):
     config["save_path"]=wandb.run.dir
     config["wandb_url"]=wandb.run.get_url()
 
-    #model=unet.Unet(config)
-    model=drn.DRN(config)
+    model=unet.Unet(config)
+    #model=drn.DRN(config)
     #model=fcnn.FCNN(config)
 
     wandb.config["cnn learnable parameters"]=sum(p.numel() for p in model.parameters())
