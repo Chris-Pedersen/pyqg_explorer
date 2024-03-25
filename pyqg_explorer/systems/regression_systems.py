@@ -184,6 +184,7 @@ class ResidualRolloutTorch(BaseRegSytem):
         x_data = batch
         
         loss=0
+        loss_state=0
         
         for aa in range(0,x_data.shape[1]-1):
             if aa==0:
@@ -192,11 +193,18 @@ class ResidualRolloutTorch(BaseRegSytem):
                 x_t=x_dt+x_t
             x_dt=self(x_t)
             loss_dt=self.criterion(x_dt,x_data[:,aa+1,:,:,:]-x_data[:,aa,:,:,:])*np.exp(-aa*self.config["decay_coeff"])
-            self.log(f"{kind}_loss_%d" % aa, loss_dt, on_step=False, on_epoch=True)
+            ## Calculate state loss such that we can compare to the state-predicting emulator
+            with torch.no_grad():
+                loss_dt_state=self.criterion(x_dt+x_t,x_data[:,aa+1,:,:,:])*np.exp(-aa*self.config["decay_coeff"])
+                loss_state+=loss_dt_state
+            self.log(f"{kind}_loss_resid_%d" % aa, loss_dt, on_step=False, on_epoch=True)
+            self.log(f"{kind}_loss_%d" % aa, loss_dt_state, on_step=False, on_epoch=True)
             loss+=loss_dt
             
-        self.log(f"{kind}_loss", loss, on_step=False, on_epoch=True) 
+        self.log(f"{kind}_loss_resid", loss, on_step=False, on_epoch=True)
+        self.log(f"{kind}_loss", loss_state, on_step=False, on_epoch=True) 
         return loss
+
 
 class ResidualRollout(BaseRegSytem):
     """ Train an emulator to predict residuals over some time horizon. Can either train to use
