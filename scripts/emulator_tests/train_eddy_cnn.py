@@ -90,7 +90,7 @@ def train(rollout,subsample=None):
 
     wandb.finish()
 
-rollouts=[1,2,4,6]
+rollouts=[1,4,6]
 
 for rollout in rollouts:
     train(rollout,subsample=70000)
