@@ -21,6 +21,7 @@ class TimeMLP(nn.Module):
   
         return self.act(x)
 
+
 class ConvBlock(nn.Module):
     def __init__(self,in_channels,out_channels,kernel_size,time_embedding_dim,final_layer=False):
         """ Conv block including time embeddings
@@ -160,23 +161,25 @@ class FCNN(nn.Module):
         ## with an 8 layer CNN
         if ("conv_layer" in self.config) == False:
             self.config["conv_layers"]=8
-        blocks.extend(make_block(self.config["input_channels"],128,5,self.config["activation"])) #1
-        blocks.extend(make_block(128,64,5,self.config["activation"]))                            #2
+        blocks.extend(make_block(self.config["input_channels"],128,5,self.config["activation"],batch_norm=self.config["batch_norm"])) #1
+        blocks.extend(make_block(128,64,5,self.config["activation"],batch_norm=self.config["batch_norm"]))                            #2
         if self.config["conv_layers"]==3:
             blocks.extend(make_block(64,self.config["output_channels"],3,'False',False))
         elif self.config["conv_layers"]==4:
-            blocks.extend(make_block(64,32,3,self.config["activation"]))                            
+            blocks.extend(make_block(64,32,3,self.config["activation"],batch_norm=self.config["batch_norm"]))                            
             blocks.extend(make_block(32,self.config["output_channels"],3,'False',False))
         else: ## 5 layers or more
-            blocks.extend(make_block(64,32,3,self.config["activation"])) ## 3rd layer
+            blocks.extend(make_block(64,32,3,self.config["activation"],batch_norm=self.config["batch_norm"])) ## 3rd layer
             for aa in range(4,config["conv_layers"]):
                 ## 4th and above layer
-                blocks.extend(make_block(32,32,3,self.config["activation"]))
+                blocks.extend(make_block(32,32,3,self.config["activation"],batch_norm=self.config["batch_norm"]))
             ## Output layer
             blocks.extend(make_block(32,self.config["output_channels"],3,'False',False))
         self.conv = nn.Sequential(*blocks)
 
     def forward(self, x):
+        if len(x.shape)==3:
+            x=x.unsqueeze(0)
         x = self.conv(x)
         return x
 
