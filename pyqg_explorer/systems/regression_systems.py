@@ -26,7 +26,8 @@ config={## Dastaset config
         "output_channels":2,
         "activation":"ReLU",
         "save_name":"model_weights.pt",
-        "conv_layers":5
+        "conv_layers":5,
+        "batch_norm":True
         }
 
 
@@ -153,6 +154,8 @@ class RolloutTorch(BaseRegSytem):
     """ Train an emulator to predict the state of the field over some time horizon """
     def __init__(self,network,config:dict):
         super().__init__(network,config)
+        print(config["residual"])
+        assert config["residual"]==False, "This is a state loss, not a residual loss"
         
     def step(self,batch,kind):
         """ Evaluate loss function """
@@ -178,6 +181,7 @@ class ResidualRolloutTorch(BaseRegSytem):
         here - only emulating the state residuals """
     def __init__(self,network,config:dict):
         super().__init__(network,config)
+        assert config["residual"]==True, "This is a residual loss, not a state loss"
         
     def step(self,batch,kind):
         """ Evaluate loss function """
