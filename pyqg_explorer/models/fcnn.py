@@ -161,6 +161,10 @@ class FCNN(nn.Module):
         ## with an 8 layer CNN
         if ("conv_layer" in self.config) == False:
             self.config["conv_layers"]=8
+        ## Back batch_norm toggle backwards compatible - models trained pre-3rd April 2024
+        ## won't have a batch_norm entry - they will all just have batch_norm though
+        if ("batch_norm" in self.config) == False:
+            self.config["batch_norm"]=True
         blocks.extend(make_block(self.config["input_channels"],128,5,self.config["activation"],batch_norm=self.config["batch_norm"])) #1
         blocks.extend(make_block(128,64,5,self.config["activation"],batch_norm=self.config["batch_norm"]))                            #2
         if self.config["conv_layers"]==3:
