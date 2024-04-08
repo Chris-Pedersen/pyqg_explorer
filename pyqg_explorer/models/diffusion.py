@@ -94,6 +94,17 @@ class Diffusion(nn.Module):
             x_t=self._reverse_diffusion(x_t,t,noise)
 
         return x_t
+
+    @torch.no_grad()
+    def denoising_physical(self,noised_samples,denoising_timestep,device="cuda"):
+        """ Pass validation samples, noised to time `denoising timstep`. Denoise these samples and return """
+        x_t=noised_samples.to(device)
+        for i in tqdm(range(denoising_timestep-1,-1,-1),desc="Denoising",disable=self.silence):
+            noise=torch.randn_like(x_t).to(device)
+            t=torch.tensor([i for _ in range(len(noised_samples))]).to(device)
+            x_t=self._reverse_diffusion(x_t,t,noise)
+
+        return x_t
     
     def _cosine_variance_schedule(self,timesteps,epsilon= 0.008):
         steps=torch.linspace(0,timesteps,steps=timesteps+1,dtype=torch.float32)
