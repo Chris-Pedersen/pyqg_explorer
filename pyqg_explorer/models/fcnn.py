@@ -141,8 +141,11 @@ def make_block(in_channels: int, out_channels: int, kernel_size: int,
         pass
     else:
         print('Error: wrong ReLU parameter:')
-    if batch_norm:
+    if batch_norm==True:
         block.append(nn.BatchNorm2d(out_channels))
+    elif batch_norm=="GroupNorm":
+        block.append(nn.GroupNorm(4,out_channels))
+    
     return block
 
 
