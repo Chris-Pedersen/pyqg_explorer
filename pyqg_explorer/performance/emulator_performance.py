@@ -30,6 +30,8 @@ class EmulatorMSE():
             self.eddy="eddy"
         else:
             self.eddy="jet"
+
+        self.residual=self.network.config["residual"]
             
         self.simlist_pred=[]
         self.simlist_true=[]
@@ -41,8 +43,10 @@ class EmulatorMSE():
 
         q_i_dt=self.network(q_i.unsqueeze(0))
         q_i_dt=q_i_dt.squeeze()
-
-        return q_i_dt+q_i
+        if self.residual:
+            return q_i_dt+q_i
+        else:
+            return q_i_dt
     
     def get_short_MSEs(self,return_data=False):
         ds=xr.load_dataset("/scratch/cp3759/pyqg_data/sims/emulator_trajectory_sims/torch_%s_%sk.nc" % (self.eddy,self.network.config["increment"]))
@@ -278,7 +282,7 @@ class DenoiserMSE():
 
         axs[0,2].set_title("q pdf")
 
-        plt.suptitle("Delay=%d, Timestep=%d, Interval=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
+        plt.suptitle("Delay=%d, Timestep=%d, Interval=%d, Passes=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval, self.num_passes))
         ## Set ylimits for eddy spectra
         axs[0,0].set_ylim(1e-3,5e3)
         axs[1,0].set_ylim(1e-3,1e2)
@@ -349,28 +353,28 @@ class DenoiserMSE():
             the true, emulated, and denoised fields """
 
         fig=plt.figure(figsize=(12,7))
-        plt.suptitle("Delay=%d, Timestep=%d, Interval=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval))
+        plt.suptitle("Delay=%d, Timestep=%d, Interval=%d, Passes=%d" % (self.denoise_delay,self.denoise_timestep,self.denoise_interval, self.num_passes))
         plt.subplot(2,3,1)
         plt.title("True")
-        plt.imshow(self.simlist_true[0].q[0].cpu(),cmap=cmocean.cm.balance)
+        plt.imshow(self.simlist_true[field_num].q[0].cpu(),cmap=cmocean.cm.balance)
         plt.colorbar()
         plt.subplot(2,3,2)
         plt.title("Emulator")
-        plt.imshow(self.simlist_pred[0].q[0].cpu(),cmap=cmocean.cm.balance)
+        plt.imshow(self.simlist_pred[field_num].q[0].cpu(),cmap=cmocean.cm.balance)
         plt.colorbar()
         plt.subplot(2,3,3)
         plt.title("Emulator denoised")
-        plt.imshow(self.simlist_dn[0].q[0].cpu(),cmap=cmocean.cm.balance)
+        plt.imshow(self.simlist_dn[field_num].q[0].cpu(),cmap=cmocean.cm.balance)
         plt.colorbar()
 
         plt.subplot(2,3,4)
-        plt.imshow(self.simlist_true[0].q[1].cpu(),cmap=cmocean.cm.balance)
+        plt.imshow(self.simlist_true[field_num].q[1].cpu(),cmap=cmocean.cm.balance)
         plt.colorbar()
         plt.subplot(2,3,5)
-        plt.imshow(self.simlist_pred[0].q[1].cpu(),cmap=cmocean.cm.balance)
+        plt.imshow(self.simlist_pred[field_num].q[1].cpu(),cmap=cmocean.cm.balance)
         plt.colorbar()
         plt.subplot(2,3,6)
-        plt.imshow(self.simlist_dn[0].q[1].cpu(),cmap=cmocean.cm.balance)
+        plt.imshow(self.simlist_dn[field_num].q[1].cpu(),cmap=cmocean.cm.balance)
         plt.colorbar()
 
         return fig
