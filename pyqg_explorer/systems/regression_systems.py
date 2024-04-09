@@ -165,7 +165,7 @@ class RolloutTorch(BaseRegSytem):
         
         for aa in range(0,x_data.shape[1]-1):
             if aa==0:
-                x_pred=x_data[:,0,:,:,:]
+                x_pred=self(x_data[:,0,:,:,:])
             else:
                 x_pred=self(x_pred)
             loss_dt=self.criterion(x_pred,x_data[:,aa+1,:,:,:])*np.exp(-aa*self.config["decay_coeff"])
