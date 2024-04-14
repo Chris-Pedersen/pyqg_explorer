@@ -3,7 +3,7 @@ import torch
 """ Functions to normalise and denormalise input and output fields """
 
 def normalise_field(field, mean, std):
-    """ Map a field in the form of a torch tensor to a normalised space """
+    """ Map a field (torch tensor) to a normalised space """
     field = field.clone()
     field.sub_(mean).div_(std)
     return field
@@ -13,6 +13,22 @@ def denormalise_field(field, mean, std):
     field = field.clone()
     field.mul_(std).add_(mean)
     return field
+
+def normalise(self,q,config):
+    ## Map from physical to normalised space using the factors used to train the network
+    ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
+    x_upper = normalise_field(q[0],config["q_mean_upper"],network.config["q_std_upper"])
+    x_lower = normalise_field(q[1],config["q_mean_lower"],network.config["q_std_lower"])
+    x = torch.stack((x_upper,x_lower),dim=0)
+    return x
+
+def denormalise(self,q,config):
+    ## Map from physical to normalised space using the factors used to train the network
+    ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
+    x_upper = denormalise_field(q[0],network.config["q_mean_upper"],network.config["q_std_upper"])
+    x_lower = denormalise_field(q[1],network.config["q_mean_lower"],network.config["q_std_lower"])
+    x = torch.stack((x_upper,x_lower),dim=0)
+    return x
 
 
 def produce_standard_q(model,x_data):
