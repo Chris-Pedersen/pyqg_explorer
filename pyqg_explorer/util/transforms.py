@@ -14,7 +14,7 @@ def denormalise_field(field, mean, std):
     field.mul_(std).add_(mean)
     return field
 
-def normalise(self,q,config):
+def normalise(q,config):
     ## Map from physical to normalised space using the factors used to train the network
     ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
     x_upper = normalise_field(q[0],config["q_mean_upper"],network.config["q_std_upper"])
@@ -22,7 +22,7 @@ def normalise(self,q,config):
     x = torch.stack((x_upper,x_lower),dim=0)
     return x
 
-def denormalise(self,q,config):
+def denormalise(q,config):
     ## Map from physical to normalised space using the factors used to train the network
     ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
     x_upper = denormalise_field(q[0],network.config["q_mean_upper"],network.config["q_std_upper"])
