@@ -5,7 +5,6 @@ import os
 import pickle
 import copy
 from itertools import *
-import pyqg_explorer.util.transforms as transforms
 
 ###########################################################################
 ############################## Imported UNET ##############################
@@ -25,7 +24,8 @@ class ChannelShuffle(nn.Module):
 class ConvBnSiLu(nn.Module):
     def __init__(self,in_channels,out_channels,kernel_size,stride=1,padding=0):
         super().__init__()
-        self.module=nn.Sequential(nn.Conv2d(in_channels,out_channels,kernel_size,stride=stride,padding=padding),
+        self.module=nn.Sequential(nn.Conv2d(in_channels,out_channels,kernel_size,stride=stride,
+                                                    padding=padding,padding_mode="circular"),
                                   nn.BatchNorm2d(out_channels),
                                   nn.SiLU(inplace=True))
     def forward(self,x):
@@ -97,7 +97,8 @@ class EncoderBlock(nn.Module):
         self.conv0=nn.Sequential(*[ResidualBottleneck(in_channels,in_channels) for i in range(3)],
                                     ResidualBottleneck(in_channels,out_channels//2))
 
-        self.time_mlp=TimeMLP(embedding_dim=time_embedding_dim,hidden_dim=out_channels,out_dim=out_channels//2)
+        if time_embedding_dim is not None:
+            self.time_mlp=TimeMLP(embedding_dim=time_embedding_dim,hidden_dim=out_channels,out_dim=out_channels//2)
         self.conv1=ResidualDownsample(out_channels//2,out_channels)
     
     def forward(self,x,t=None):
@@ -115,7 +116,8 @@ class DecoderBlock(nn.Module):
         self.conv0=nn.Sequential(*[ResidualBottleneck(in_channels,in_channels) for i in range(3)],
                                     ResidualBottleneck(in_channels,in_channels//2))
 
-        self.time_mlp=TimeMLP(embedding_dim=time_embedding_dim,hidden_dim=in_channels,out_dim=in_channels//2)
+        if time_embedding_dim is not None:
+            self.time_mlp=TimeMLP(embedding_dim=time_embedding_dim,hidden_dim=in_channels,out_dim=in_channels//2)
         self.conv1=ResidualBottleneck(in_channels//2,out_channels//2)
 
     def forward(self,x,x_shortcut,t=None):
@@ -140,14 +142,19 @@ class Unet(nn.Module):
         assert isinstance(self.config["dim_mults"],(list,tuple))
         assert self.config["base_dim"]%2==0
         self.config["model_type"]="Unet"
+        if "time_embedding_dim" in config:
+            self.time_embedding_dim=self.config["time_embedding_dim"]
+            self.timesteps=self.config["timesteps"]
+            self.time_embedding=nn.Embedding(self.config["timesteps"],self.config["time_embedding_dim"])
+        else:
+            self.time_embedding_dim=None
 
         channels=self._cal_channels(self.config["base_dim"],self.config["dim_mults"])
 
         self.init_conv=ConvBnSiLu(self.config["input_channels"],self.config["base_dim"],3,1,1)
-        self.time_embedding=nn.Embedding(self.config["timesteps"],self.config["time_embedding_dim"])
 
-        self.encoder_blocks=nn.ModuleList([EncoderBlock(c[0],c[1],self.config["time_embedding_dim"]) for c in channels])
-        self.decoder_blocks=nn.ModuleList([DecoderBlock(c[1],c[0],self.config["time_embedding_dim"]) for c in channels[::-1]])
+        self.encoder_blocks=nn.ModuleList([EncoderBlock(c[0],c[1],self.time_embedding_dim) for c in channels])
+        self.decoder_blocks=nn.ModuleList([DecoderBlock(c[1],c[0],self.time_embedding_dim) for c in channels[::-1]])
     
         self.mid_block=nn.Sequential(*[ResidualBottleneck(channels[-1][1],channels[-1][1]) for i in range(2)],
                                         ResidualBottleneck(channels[-1][1],channels[-1][1]//2))
@@ -287,25 +294,3 @@ class U_net(torch.nn.Module):
             pickle.dump(save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
         print("Model saved as %s" % save_string)
         return
-
-    def pred(self, x):
-        """ Method to call when receiving un-normalised data, when implemented as a pyqg
-            parameterisation. Expects a 3D numpy array """
-
-        x=torch.tensor(x).float()
-        ## Map from physical to normalised space using the factors used to train the network
-        ## Normalise each field individually, then cat arrays back to shape appropriate for a torch model
-        x_upper = transforms.normalise_field(x[0],self.config["q_mean_upper"],self.config["q_std_upper"])
-        x_lower = transforms.normalise_field(x[1],self.config["q_mean_lower"],self.config["q_std_lower"])
-        x = torch.stack((x_upper,x_lower),dim=0).unsqueeze(0)
-
-        ## Pass the normalised fields through our network
-        x = self(x)
-
-        ## Map back from normalised space to physical units
-        s_upper=transforms.denormalise_field(x[:,0,:,:],self.config["s_mean_upper"],self.config["s_std_upper"])
-        s_lower=transforms.denormalise_field(x[:,1,:,:],self.config["s_mean_lower"],self.config["s_std_lower"])
-
-        ## Reshape to match pyqg dimensions, and cast to numpy array
-        s=torch.cat((s_upper,s_lower)).detach().numpy().astype(np.double)
-        return s
