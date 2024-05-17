@@ -3,7 +3,11 @@ from pyqg.diagnostic_tools import calc_ispec
 import numpy as np
 
 
-def run_simulation(m, sampling_freq=1000, sampling_dist='uniform'):
+def run_simulation(m, sampling_freq=1000):
+    """
+    m: pyqg model object
+    sampling_freq: frequency in numerical timesteps in which to extract dataset
+    """
     snapshots = []
     while m.t < m.tmax:
         if m.tc % sampling_freq == 0:
@@ -22,12 +26,12 @@ def run_simulation(m, sampling_freq=1000, sampling_dist='uniform'):
     return d_cat
 
 
-def generate_dataset(sampling_freq=1000, sampling_dist='uniform', parameterization=None, **kwargs):
+def generate_dataset(sampling_freq=1000, parameterization=None, **kwargs):
     if parameterization is not None:
         if isinstance(parameterization, str):
             model_cnn=misc.load_model(parameterization)
             parameterization=parameterizations.Parameterization(model_cnn)
     m = util.initialize_pyqg_model(parameterization=parameterization,**kwargs)
-    return run_simulation(m, sampling_freq=sampling_freq, sampling_dist=sampling_dist)
+    return run_simulation(m, sampling_freq=sampling_freq)
 
     
